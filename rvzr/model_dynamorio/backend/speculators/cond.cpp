@@ -4,7 +4,10 @@
 // Copyright (C) Microsoft Corporation
 // SPDX-License-Identifier: MIT
 
+#include <cstdint>
 #include <functional>
+#include <iostream>
+#include <optional>
 #include <unordered_map>
 
 #include <dr_api.h> // NOLINT
@@ -12,12 +15,47 @@
 #include <dr_ir_instr.h>
 #include <dr_ir_opcodes_x86.h>
 
+#include "dr_defines.h"
+#include "observables.hpp"
 #include "speculator_abc.hpp"
 #include "speculators/cond.hpp"
 
 // =================================================================================================
 // Local helper functions
 // =================================================================================================
+
+typedef struct {
+    pc_t target;
+    pc_t fallthrough;
+    bool is_loop;
+    bool will_jump;
+} BranchInfo;
+
+static std::optional<BranchInfo> get_branch_info(instr_obs_t instr, dr_mcontext_t *mc, void *dc,
+                                                 instr_noalloc_t *noalloc)
+{
+    // Decode the instruction
+    instr_noalloc_init(dc, noalloc);
+    instr_t *cur_instr = instr_from_noalloc(noalloc);
+    byte *next_pc = decode(dc, (byte *)instr.pc, cur_instr);
+    if (next_pc == nullptr) {
+        dr_printf("[ERROR] cond_speculator: Failed to decode instruction\n");
+        dr_abort();
+        return {};
+    }
+
+    // Not a branch, return empty option
+    if (not instr_is_cbr(cur_instr))
+        return {};
+
+    // Parse branch information
+    return BranchInfo{
+        .target = (pc_t)instr_get_branch_target_pc(cur_instr),
+        .fallthrough = (pc_t)next_pc,
+        .is_loop = instr_is_cti_loop(cur_instr),
+        .will_jump = instr_jcc_taken(cur_instr, mc->xflags),
+    };
+}
 
 // =================================================================================================
 // Class implementation
@@ -26,16 +64,46 @@
 pc_t SpeculatorCond::handle_instruction(instr_obs_t instr, dr_mcontext_t *mc, void *dc)
 {
     // Handling in the superclass takes priority
-    const pc_t next_pc = SpeculatorABC::handle_instruction(instr, mc, dc);
-    if (next_pc != 0)
+    pc_t next_pc = SpeculatorABC::handle_instruction(instr, mc, dc);
+    if (next_pc != 0) {
+        dr_printf("[COND] Handled by superclass @ pc:%lx\n", instr.pc);
         return next_pc;
+    }
 
     // Check if speculation should be skipped
-    if (skip_speculation())
+    if (skip_speculation()) {
+        dr_printf("[COND] Skipped spec @ pc:0x%lx\n", instr.pc);
         return 0;
+    }
+    // Decode the instruction
+    instr_noalloc_t noalloc;
+    const auto &branch_info = get_branch_info(instr, mc, dc, &noalloc);
 
-    // TODO: implement speculation here
+    // Skip if not a branch
+    if (not branch_info) {
+        dr_printf("[COND] Not a branch @ pc:0x%lx\n", instr.pc);
+        return 0;
+    }
+    dr_printf("[COND] Found branch @ pc:0x%lx\n", instr.pc);
+    dr_printf("[COND] target:0x%lx    fallthrough:0x%lx\n", branch_info->target,
+              branch_info->fallthrough);
 
-    // redirect execution to the speculative next instruction
-    return 0;
+    // LOOP instructions must also decrement RCX
+    if (branch_info->is_loop) {
+        dr_printf("   [COND] Loop found @ pc:0x%lx\n", instr.pc);
+        mc->rcx -= 1;
+    }
+
+    // Simulate misprediction: checkpoint the correct path, speculate the opposite one
+    pc_t speculated_pc = 0;
+    if (branch_info->will_jump) {
+        checkpoint(mc, branch_info->target);
+        speculated_pc = branch_info->fallthrough;
+    } else {
+        checkpoint(mc, branch_info->fallthrough);
+        speculated_pc = branch_info->target;
+    }
+
+    // Redirect execution to the speculative next instruction
+    return speculated_pc;
 }
