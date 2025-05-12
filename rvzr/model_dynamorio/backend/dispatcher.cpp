@@ -6,6 +6,7 @@
 // Copyright (C) Microsoft Corporation
 // SPDX-License-Identifier: MIT
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -101,6 +102,18 @@ static void dispatch_callback(uint64_t opcode, uint64_t pc, uint64_t has_mem_ref
         .has_mem_access = (bool)has_mem_ref,
     };
 
+    disassemble_with_info(drcontext, (byte *)pc, STDERR, true, false);
+    module_data_t *mod = dr_lookup_module((byte *)pc);
+    if (mod != nullptr) {
+        auto offset = (size_t)(pc - (pc_t)mod->start);
+        dr_fprintf(STDERR, "Module: %s\n", mod->full_path);
+        dr_fprintf(STDERR, "Offset in original binary: 0x%zx\n", offset);
+        dr_fprintf(STDERR, "pc:%lx   xflags:%lx   flags:%lx\n", mc.pc, mc.xflags, mc.flags);
+        dr_fprintf(STDERR, "rax:%lx  rbx:%lx  rcx:%lx  rdx:%lx  rdi:%lx  rsi:%lx  rsp:%lx\n",
+                   mc.rax, mc.rbx, mc.rcx, mc.rdx, mc.rdi, mc.rsi, mc.rsp);
+        dr_free_module_data(mod);
+    }
+
     // pass down to instruction dispatch functions and redirect execution if needed
     const pc_t next_pc = instruction_dispatch(&mc, drcontext, bundle, instr);
     if (next_pc != 0) {
@@ -118,23 +131,21 @@ static void dispatch_callback(uint64_t opcode, uint64_t pc, uint64_t has_mem_ref
     dr_set_mcontext(drcontext, &mc);
 }
 
-void Dispatcher::handle_exception(void *drcontext, dr_siginfo_t * /* siginfo */)
+void Dispatcher::handle_exception(void *drcontext, dr_siginfo_t *siginfo)
 {
-    // dr_printf("[INFO] Dispatcher::handle_exception: exception %d\n", siginfo->sig);
+    dr_printf("[XCPT] Dispatcher::handle_exception: exception %d\n", siginfo->sig);
     if (!module_bundle->speculator->in_speculation) {
-        // dr_printf("[ERROR] Dispatcher::handle_exception: exception %d on a non-speculative
-        // path\n",
-        //   siginfo->sig);
+        dr_printf("[XCPT] Dispatcher::handle_exception: exception on a non-speculative path\n");
         return;
     }
-    // dr_printf("[INFO] Dispatcher::handle_exception: is speculative\n");
+    dr_printf("[XCPT] Dispatcher::handle_exception: is speculative\n");
 
     // Exceptions on speculative paths cause speculation to be aborted
     dr_mcontext_t mc = {sizeof(mc), DR_MC_ALL};
     dr_get_mcontext(drcontext, &mc);
     const pc_t next_pc = module_bundle->speculator->rollback(&mc);
     mc.pc = (byte *)next_pc;
-    // dr_printf("[INFO] Dispatcher::handle_exception: redirecting to %llx\n", (uint64_t)next_pc);
+    dr_printf("[XCPT] Dispatcher::handle_exception: redirecting to %llx\n", (uint64_t)next_pc);
     dr_redirect_execution(&mc);
 }
 

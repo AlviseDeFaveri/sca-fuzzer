@@ -70,6 +70,7 @@ pc_t SpeculatorABC::rollback(dr_mcontext_t *mc)
             break;
 
         // NOTE: same as in handle_mem_access, we should use dr_safe_write here
+        dr_printf("[Rollback] Writing val: 0x%lx to addr: 0x%lx\n", it->val, it->addr);
         *(uint64_t *)it->addr = it->val;
     }
 
@@ -80,7 +81,8 @@ pc_t SpeculatorABC::rollback(dr_mcontext_t *mc)
         in_speculation = false;
     }
 
-    // dr_printf("[INFO] SpeculatorABC::rollback: %llx\n", (long long)checkpoint.rollback_pc);
+    dr_printf("[INFO] SpeculatorABC::rollback: Rolling back to pc %llx\n",
+              (long long)checkpoint.rollback_pc);
     return checkpoint.rollback_pc;
 }
 
@@ -92,13 +94,16 @@ pc_t SpeculatorABC::handle_instruction(instr_obs_t instr, dr_mcontext_t *mc, voi
 
     // rollback if we hit a speculation barrier
     if (is_speculation_barrier(instr.opcode)) {
+        dr_printf("  [ABC] spec barrier rollback @ pc:%lx\n", instr.pc);
         return rollback(mc);
     }
 
     // rollback if we hit a speculation window limit
     spec_window += 1;
-    if (spec_window >= max_spec_window)
+    if (spec_window >= max_spec_window) {
+        dr_printf("   [ABC] spec window rollback @ pc:%lx\n", instr.pc);
         return rollback(mc);
+    }
 
     return 0;
 }
