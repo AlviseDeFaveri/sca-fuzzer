@@ -200,7 +200,7 @@ dr_emit_flags_t Dispatcher::instrument_instruction(void *drcontext, instrlist_t 
 // =================================================================================================
 // Constructors and Destructors
 // =================================================================================================
-Dispatcher::Dispatcher(cli_args_t *cli_args)
+Dispatcher::Dispatcher(cli_args_t *cli_args) : instrumentation_on(true)
 {
     // Create service modules
     module_bundle = std::make_unique<module_bundle_t>();
