@@ -46,7 +46,10 @@ void SpeculatorABC::checkpoint(dr_mcontext_t *mc, pc_t pc)
     // dr_printf("[INFO] SpeculatorABC::checkpoint: checkpointing at %llx\n", (long long)pc);
 
     // store the register state and the rollback address
-    checkpoints.push_back({.rollback_pc = pc, .spec_window = spec_window, .mc = *mc});
+    checkpoints.push_back({.rollback_pc = pc,
+                           .spec_window = spec_window,
+                           .mc = *mc,
+                           .store_log_size = store_log.size()});
 
     // update the state machine that tracks the speculation proces
     in_speculation = true;
@@ -65,13 +68,17 @@ pc_t SpeculatorABC::rollback(dr_mcontext_t *mc)
     spec_window = checkpoint.spec_window;
 
     // undo all store operations performed during speculation
-    for (auto it = store_log.rbegin(); it != store_log.rend(); ++it) {
-        if (it->nesting_level < nesting)
+    while (store_log.size() > checkpoint.store_log_size) {
+        const auto cur_store = store_log.back();
+        store_log.pop_back();
+
+        if (cur_store.nesting_level < nesting)
             break;
 
         // NOTE: same as in handle_mem_access, we should use dr_safe_write here
-        dr_printf("[Rollback] Writing val: 0x%lx to addr: 0x%lx\n", it->val, it->addr);
-        *(uint64_t *)it->addr = it->val;
+        // dr_printf("[Rollback] Writing val: 0x%lx to addr: 0x%lx\n", cur_store.val,
+        // cur_store.addr);
+        *(uint64_t *)cur_store.addr = cur_store.val;
     }
 
     // update the state machine that tracks the speculation process
@@ -79,11 +86,22 @@ pc_t SpeculatorABC::rollback(dr_mcontext_t *mc)
     if (nesting <= 0) {
         nesting = 0;
         in_speculation = false;
+        store_log.clear();
     }
 
     dr_printf("[INFO] SpeculatorABC::rollback: Rolling back to pc %llx\n",
               (long long)checkpoint.rollback_pc);
     return checkpoint.rollback_pc;
+}
+
+pc_t SpeculatorABC::rollback_all(dr_mcontext_t *mc)
+{
+    pc_t next_pc = 0;
+    while (in_speculation) {
+        next_pc = rollback(mc);
+    }
+
+    return next_pc;
 }
 
 pc_t SpeculatorABC::handle_instruction(instr_obs_t instr, dr_mcontext_t *mc, void * /*dc*/)

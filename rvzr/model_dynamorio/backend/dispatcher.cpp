@@ -143,7 +143,7 @@ void Dispatcher::handle_exception(void *drcontext, dr_siginfo_t *siginfo)
     // Exceptions on speculative paths cause speculation to be aborted
     dr_mcontext_t mc = {sizeof(mc), DR_MC_ALL};
     dr_get_mcontext(drcontext, &mc);
-    const pc_t next_pc = module_bundle->speculator->rollback(&mc);
+    const pc_t next_pc = module_bundle->speculator->rollback_all(&mc);
     mc.pc = (byte *)next_pc;
     dr_printf("[XCPT] Dispatcher::handle_exception: redirecting to %llx\n", (uint64_t)next_pc);
     dr_redirect_execution(&mc);

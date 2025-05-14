@@ -23,6 +23,7 @@ typedef struct {
     pc_t rollback_pc;
     uint64_t spec_window;
     dr_mcontext_t mc;
+    size_t store_log_size;
 } checkpoint_t;
 
 typedef struct {
@@ -73,6 +74,11 @@ class SpeculatorABC
     /// @param mc The machine context of the current instruction
     /// @return The PC of the next instruction to be executed
     virtual pc_t rollback(dr_mcontext_t *mc);
+
+    /// @brief Rollback all nested speculative windows.
+    /// @param mc The machine context of the current instruction
+    /// @return The PC of the next architectural instruction
+    virtual pc_t rollback_all(dr_mcontext_t *mc);
 
     /// @brief Check if the speculation should be skipped (e.g., due to exceeding the maximum
     ///        nesting, speculation window, or other conditions).
