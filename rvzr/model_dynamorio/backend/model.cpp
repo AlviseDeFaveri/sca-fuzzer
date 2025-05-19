@@ -114,6 +114,9 @@ dr_emit_flags_t event_bb_instrumentation(void *drcontext, void * /*tag*/, instrl
 /// @return void
 void event_instrumentation_start(void *wrapctx, DR_PARAM_OUT void **user_data)
 {
+    // dr_printf("======= INSTRUMENTATION STARTED ============\n");
+    // FIXME: Restrict the flushing to only useful stuff.
+    dr_delay_flush_region((byte *)0, (size_t)-1, 0, NULL);
     dispatcher->start(wrapctx, user_data);
 }
 
@@ -123,7 +126,10 @@ void event_instrumentation_start(void *wrapctx, DR_PARAM_OUT void **user_data)
 /// @return void
 void event_instrumentation_end(void *wrapctx, void *user_data)
 {
+    // dr_printf("======= INSTRUMENTATION ENDED ============\n");
     dispatcher->finalize(wrapctx, user_data);
+    // FIXME: Restrict the flushing to only useful stuff.
+    dr_delay_flush_region((byte *)0, (size_t)-1, 0, NULL);
 }
 
 /// @brief Callback executed upon exceptions
@@ -132,12 +138,26 @@ void event_instrumentation_end(void *wrapctx, void *user_data)
 /// @return if the exception is handled, this function does not return
 /// (dr_redirect_execution is called by handlers); otherwise, it returns true so that DR will
 /// continue with the default exception handling
-dr_signal_action_t event_exception(void *drcontext, dr_siginfo_t *siginfo)
+static dr_signal_action_t event_signal(void *drcontext, dr_siginfo_t *siginfo)
 {
-    dispatcher->handle_exception(drcontext, siginfo);
+    // dr_printf("[SIG] Signal received: %lx\n", siginfo->sig);
+
+    if (dispatcher->handle_exception(drcontext, siginfo)) {
+        return DR_SIGNAL_REDIRECT;
+    }
 
     // Continue with the default exception handling if no redirection happened
     return DR_SIGNAL_DELIVER;
+}
+
+static bool event_pre_syscall(void *drcontext, int sysnum)
+{
+    return dispatcher->handle_syscall(drcontext, sysnum);
+}
+
+static bool event_filter_syscall(void *drcontext, int sysnum)
+{
+    return true; /* intercept everything */
 }
 
 /// @brief Callback executed before exiting the application.
@@ -188,7 +208,9 @@ void dr_model_init()
     if (!drmgr_register_bb_instrumentation_event(nullptr, event_bb_instrumentation, nullptr))
         throw std::runtime_error("ERROR: failed to register a callback\n");
 
-    drmgr_register_signal_event(event_exception);
+    drmgr_register_signal_event(event_signal);
+    dr_register_filter_syscall_event(event_filter_syscall);
+    drmgr_register_pre_syscall_event(event_pre_syscall);
     dr_register_exit_event(event_exit);
 }
 

@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -28,8 +29,9 @@ typedef struct {
 
 typedef struct {
     uint64_t addr;
-    uint64_t val;
+    uint8_t val[512];
     unsigned int nesting_level;
+    size_t size;
 } store_log_entry_t;
 
 // =================================================================================================
@@ -55,6 +57,9 @@ class SpeculatorABC
 
     /// @param Boolean flag indicating whether the speculator is currently active
     bool in_speculation = false;
+    bool should_rollback = false;
+
+    void defer_rollback() { should_rollback = true; }
 
     // ---------------------------------------------------------------------------------------------
     // Public Methods
@@ -74,11 +79,6 @@ class SpeculatorABC
     /// @param mc The machine context of the current instruction
     /// @return The PC of the next instruction to be executed
     virtual pc_t rollback(dr_mcontext_t *mc);
-
-    /// @brief Rollback all nested speculative windows.
-    /// @param mc The machine context of the current instruction
-    /// @return The PC of the next architectural instruction
-    virtual pc_t rollback_all(dr_mcontext_t *mc);
 
     /// @brief Check if the speculation should be skipped (e.g., due to exceeding the maximum
     ///        nesting, speculation window, or other conditions).

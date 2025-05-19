@@ -90,6 +90,11 @@ static void dispatch_callback(uint64_t opcode, uint64_t pc, uint64_t has_mem_ref
         return; // unreachable
     }
 
+    // if (bundle->speculator->in_speculation)
+    //     dr_printf("[SPEC] %lx, %lx\n", pc, opcode);
+    // else
+    //     dr_printf("[ARCH] %lx, %lx\n", pc, opcode);
+
     // get current context
     void *drcontext = dr_get_current_drcontext();
     dr_mcontext_t mc = {sizeof(mc), DR_MC_ALL};
@@ -102,17 +107,19 @@ static void dispatch_callback(uint64_t opcode, uint64_t pc, uint64_t has_mem_ref
         .has_mem_access = (bool)has_mem_ref,
     };
 
-    disassemble_with_info(drcontext, (byte *)pc, STDERR, true, false);
-    module_data_t *mod = dr_lookup_module((byte *)pc);
-    if (mod != nullptr) {
-        auto offset = (size_t)(pc - (pc_t)mod->start);
-        dr_fprintf(STDERR, "Module: %s\n", mod->full_path);
-        dr_fprintf(STDERR, "Offset in original binary: 0x%zx\n", offset);
-        dr_fprintf(STDERR, "pc:%lx   xflags:%lx   flags:%lx\n", mc.pc, mc.xflags, mc.flags);
-        dr_fprintf(STDERR, "rax:%lx  rbx:%lx  rcx:%lx  rdx:%lx  rdi:%lx  rsi:%lx  rsp:%lx\n",
-                   mc.rax, mc.rbx, mc.rcx, mc.rdx, mc.rdi, mc.rsi, mc.rsp);
-        dr_free_module_data(mod);
-    }
+    // disassemble_with_info(drcontext, (byte *)pc, STDOUT, true, false);
+    // module_data_t *mod = dr_lookup_module((byte *)pc);
+    // if (mod != nullptr) {
+    //     auto offset = (size_t)(pc - (pc_t)mod->start);
+    //     dr_printf("Module: %s\n", mod->full_path);
+    //     dr_printf("Offset in original binary: 0x%zx\n", offset);
+    //     dr_printf("pc:%lx   xflags:%lx   flags:%lx  \n", mc.pc, mc.xflags, mc.flags);
+    //     dr_printf("rax:%lx  rbx:%lx  rcx:%lx  rdx:%lx  rdi:%lx  rsi:%lx  rsp:%lx  r8:%lx  r9:%lx"
+    //               "r10:%lx  r11:%lx  r12:%lx  r13:%lx  r14:%lx  r15:%lx\n",
+    //               mc.rax, mc.rbx, mc.rcx, mc.rdx, mc.rdi, mc.rsi, mc.rsp, mc.r8, mc.r9, mc.r10,
+    //               mc.r11, mc.r12, mc.r13, mc.r14, mc.r15);
+    //     dr_free_module_data(mod);
+    // }
 
     // pass down to instruction dispatch functions and redirect execution if needed
     const pc_t next_pc = instruction_dispatch(&mc, drcontext, bundle, instr);
@@ -131,22 +138,35 @@ static void dispatch_callback(uint64_t opcode, uint64_t pc, uint64_t has_mem_ref
     dr_set_mcontext(drcontext, &mc);
 }
 
-void Dispatcher::handle_exception(void *drcontext, dr_siginfo_t *siginfo)
+bool Dispatcher::handle_syscall(void *drcontext, int sysnum)
 {
-    dr_printf("[XCPT] Dispatcher::handle_exception: exception %d\n", siginfo->sig);
+    // dr_printf("[SYS] Dispatcher::handle_syscall: syscall %d\n", sysnum);
     if (!module_bundle->speculator->in_speculation) {
-        dr_printf("[XCPT] Dispatcher::handle_exception: exception on a non-speculative path\n");
-        return;
+        // dr_printf("[SYS] Dispatcher::handle_syscall: syscall on a non-speculative path\n");
+        return true; /* execute normally */
     }
-    dr_printf("[XCPT] Dispatcher::handle_exception: is speculative\n");
+    // dr_printf("[SYS] Dispatcher::handle_syscall: is speculative, skipping\n");
+
+    module_bundle->speculator->defer_rollback();
+    return false; /* skip syscall */
+}
+
+bool Dispatcher::handle_exception(void * /*drcontext*/, dr_siginfo_t *siginfo)
+{
+    // dr_printf("[XCPT] Dispatcher::handle_exception: exception %d\n", siginfo->sig);
+    if (!module_bundle->speculator->in_speculation) {
+        // dr_printf("[XCPT] Dispatcher::handle_exception: exception on a non-speculative path\n");
+        return false;
+    }
+    // dr_printf("[XCPT] Dispatcher::handle_exception: is speculative\n");
 
     // Exceptions on speculative paths cause speculation to be aborted
-    dr_mcontext_t mc = {sizeof(mc), DR_MC_ALL};
-    dr_get_mcontext(drcontext, &mc);
-    const pc_t next_pc = module_bundle->speculator->rollback_all(&mc);
-    mc.pc = (byte *)next_pc;
-    dr_printf("[XCPT] Dispatcher::handle_exception: redirecting to %llx\n", (uint64_t)next_pc);
-    dr_redirect_execution(&mc);
+    dr_mcontext_t *mc = siginfo->mcontext;
+    const pc_t next_pc = module_bundle->speculator->rollback(mc);
+    mc->pc = (byte *)next_pc;
+    // dr_printf("[XCPT] Dispatcher::handle_exception: redirecting to %llx\n", (uint64_t)next_pc);
+    return true;
+    // dr_redirect_execution(&mc);
 }
 
 // =================================================================================================
@@ -183,6 +203,9 @@ dr_emit_flags_t Dispatcher::instrument_instruction(void *drcontext, instrlist_t 
     if (org_instr == nullptr) { // DR tell us that this instruction should be skipped
         return DR_EMIT_DEFAULT;
     }
+
+    if (!instr_is_app(instr))
+        return DR_EMIT_DEFAULT;
 
     // Get instruction parameters
     const opnd_t opcode = OPND_CREATE_INT64(instr_get_opcode(org_instr));

@@ -9,8 +9,13 @@
 // Copyright (C) Microsoft Corporation
 // SPDX-License-Identifier: MIT
 
+#include <algorithm>
+#include <array>
 #include <dr_api.h>
 
+#include "dr_defines.h"
+#include "dr_ir_opcodes_x86.h"
+#include "dr_tools.h"
 #include "observables.hpp"
 #include "speculator_abc.hpp"
 #include "util.hpp"
@@ -18,9 +23,33 @@
 // =================================================================================================
 // Local helper functions
 // =================================================================================================
-static bool is_speculation_barrier(opcode_t opcode)
+
+// See Intel Manual https://cdrdv2.intel.com/v1/dl/getContent/671200
+// chapter 10.3 - Serializing Instructions.
+static constexpr const std::array<uint64_t, 18> serializing_opcodes = {
+    // Non-privileged memory-ordering instructions
+    OP_lfence, OP_mfence, OP_sfence,
+    // Privileged serializing instructions
+    OP_invd, OP_invept, OP_invlpg, OP_invvpid, OP_lgdt, OP_lidt, OP_lldt, OP_ltr,
+    // TODO: add MOV CR (except CR8)
+    OP_wbinvd, OP_wrmsr,
+    // Non-privileged serializing instructions
+    OP_cpuid, OP_iret, OP_rsm, OP_serialize,
+    // NOTE: syscalls are not inatrumented by Dynamorio, this makes sure that speculation is aborted
+    // on speculative syscall instructions.
+    OP_syscall};
+
+// static bool is_speculation_barrier(const uint64_t opcode)
+// {
+//     return std::any_of(serializing_opcodes.begin(), serializing_opcodes.end(),
+//                        [&opcode](const uint64_t barrier) { return opcode == barrier; });
+// }
+
+static bool is_speculation_barrier(const uint64_t opcode)
 {
     return opcode == OP_lfence || opcode == OP_mfence || opcode == OP_sfence;
+    //  ||
+    //        opcode == OP_syscall;
 }
 
 // =================================================================================================
@@ -64,6 +93,7 @@ pc_t SpeculatorABC::rollback(dr_mcontext_t *mc)
         dr_abort();
     }
     const checkpoint_t checkpoint = checkpoints.back();
+    checkpoints.pop_back();
     *mc = checkpoint.mc;
     spec_window = checkpoint.spec_window;
 
@@ -75,10 +105,14 @@ pc_t SpeculatorABC::rollback(dr_mcontext_t *mc)
         if (cur_store.nesting_level < nesting)
             break;
 
-        // NOTE: same as in handle_mem_access, we should use dr_safe_write here
-        // dr_printf("[Rollback] Writing val: 0x%lx to addr: 0x%lx\n", cur_store.val,
-        // cur_store.addr);
-        *(uint64_t *)cur_store.addr = cur_store.val;
+        // dr_printf("[Rollback] Writing val: 0x%lx to addr: 0x%lx (nest: %d, sz: %d)\n",
+        //           *(uint64_t *)cur_store.val, cur_store.addr, cur_store.nesting_level,
+        //           cur_store.size);
+
+        size_t w_size = 0;
+        // TODO: maybe we can avoid this.
+        bool success = dr_safe_write((uint64_t *)cur_store.addr, cur_store.size,
+                                     (byte *)cur_store.val, &w_size);
     }
 
     // update the state machine that tracks the speculation process
@@ -86,22 +120,17 @@ pc_t SpeculatorABC::rollback(dr_mcontext_t *mc)
     if (nesting <= 0) {
         nesting = 0;
         in_speculation = false;
-        store_log.clear();
+        if (not checkpoints.empty() or not store_log.empty()) {
+            dr_printf("[ERROR] Speculation ended but there are still %d checkpoints and %d "
+                      "store logs to consume\n",
+                      checkpoints.size(), store_log.size());
+            dr_abort();
+        }
     }
 
-    dr_printf("[INFO] SpeculatorABC::rollback: Rolling back to pc %llx\n",
-              (long long)checkpoint.rollback_pc);
+    // dr_printf("[INFO] SpeculatorABC::rollback: Rolling back to pc %llx\n",
+    //           (long long)checkpoint.rollback_pc);
     return checkpoint.rollback_pc;
-}
-
-pc_t SpeculatorABC::rollback_all(dr_mcontext_t *mc)
-{
-    pc_t next_pc = 0;
-    while (in_speculation) {
-        next_pc = rollback(mc);
-    }
-
-    return next_pc;
 }
 
 pc_t SpeculatorABC::handle_instruction(instr_obs_t instr, dr_mcontext_t *mc, void * /*dc*/)
@@ -111,32 +140,58 @@ pc_t SpeculatorABC::handle_instruction(instr_obs_t instr, dr_mcontext_t *mc, voi
         return 0;
 
     // rollback if we hit a speculation barrier
+    if (should_rollback) {
+        should_rollback = false;
+        return rollback(mc);
+    }
+
+    // rollback if we hit a speculation barrier
     if (is_speculation_barrier(instr.opcode)) {
-        dr_printf("  [ABC] spec barrier rollback @ pc:%lx\n", instr.pc);
         return rollback(mc);
     }
 
     // rollback if we hit a speculation window limit
     spec_window += 1;
     if (spec_window >= max_spec_window) {
-        dr_printf("   [ABC] spec window rollback @ pc:%lx\n", instr.pc);
         return rollback(mc);
     }
 
     return 0;
 }
 
-void SpeculatorABC::handle_mem_access(bool is_write, void *address, uint64_t /*size*/)
+void SpeculatorABC::handle_mem_access(bool is_write, void *address, uint64_t size)
 {
+
+    // if (not success)
+    //     dr_printf("[MEM] unsuccessful memory op - addr: %lx  sz:%d\n", address, size);
+    // else {
+    //     if (is_write)
+    //         dr_printf("[MEM] Write - addr: %lx  sz:%d  val:%lx\n", address, size,
+    //                   *(uint64_t *)entry.val);
+    //     else
+    //         dr_printf("[MEM] Read -  addr: %lx  sz:%d  val:%lx\n", address, size,
+    //                   *(uint64_t *)entry.val);
+    // }
+
     if (not in_speculation)
         return;
 
     // record changes made to the memory
     if (is_write) {
-        // NOTE: it would be more correct to use dr_safe_read here to avoid faults;
-        // However, this code is on the hot path, and dr_safe_read is slow,
-        // so we just accept that horrible things may happen. Oh well.
-        const uint64_t val = *(uint64_t *)address;
-        store_log.push_back({.addr = (uint64_t)address, .val = val, .nesting_level = nesting});
+        //  NOTE: on speculative paths, safe reads are the only way to load
+        // from memory, since pointers might be invalid all the time.
+        store_log_entry_t entry{.addr = (uint64_t)address, .nesting_level = nesting};
+        bool success = dr_safe_read((uint64_t *)address, size, (byte *)entry.val, &entry.size);
+        if (success) {
+            store_log.push_back(entry);
+            // dr_printf("[STORELOG] Pushing *%lx = %lx (nest: %d, sz: %d) \n", (uint64_t)address,
+            //           *(uint64_t *)entry.val, nesting, size);
+
+        } else {
+            if (not in_speculation) {
+                dr_printf("[ERROR] handle_mem_access: segfault on a non-speculative path\n");
+                dr_abort();
+            }
+        }
     }
 }

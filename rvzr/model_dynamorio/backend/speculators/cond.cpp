@@ -66,13 +66,11 @@ pc_t SpeculatorCond::handle_instruction(instr_obs_t instr, dr_mcontext_t *mc, vo
     // Handling in the superclass takes priority
     pc_t next_pc = SpeculatorABC::handle_instruction(instr, mc, dc);
     if (next_pc != 0) {
-        dr_printf("[COND] Handled by superclass @ pc:%lx\n", instr.pc);
         return next_pc;
     }
 
     // Check if speculation should be skipped
     if (skip_speculation()) {
-        dr_printf("[COND] Skipped spec @ pc:0x%lx\n", instr.pc);
         return 0;
     }
     // Decode the instruction
@@ -81,16 +79,11 @@ pc_t SpeculatorCond::handle_instruction(instr_obs_t instr, dr_mcontext_t *mc, vo
 
     // Skip if not a branch
     if (not branch_info) {
-        dr_printf("[COND] Not a branch @ pc:0x%lx\n", instr.pc);
         return 0;
     }
-    dr_printf("[COND] Found branch @ pc:0x%lx\n", instr.pc);
-    dr_printf("[COND] target:0x%lx    fallthrough:0x%lx\n", branch_info->target,
-              branch_info->fallthrough);
 
     // LOOP instructions must also decrement RCX
     if (branch_info->is_loop) {
-        dr_printf("   [COND] Loop found @ pc:0x%lx\n", instr.pc);
         mc->rcx -= 1;
     }
 
