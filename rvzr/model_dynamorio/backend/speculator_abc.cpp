@@ -11,6 +11,8 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
+#include <cstdint>
 #include <dr_api.h>
 
 #include "dr_defines.h"
@@ -99,13 +101,12 @@ pc_t SpeculatorABC::rollback(dr_mcontext_t *mc)
             break;
 
         // dr_printf("[Rollback] Writing val: 0x%lx to addr: 0x%lx (nest: %d, sz: %d)\n",
-        //           *(uint64_t *)cur_store.val, cur_store.addr, cur_store.nesting_level,
-        //           cur_store.size);
+        //           cur_store.val, cur_store.addr, cur_store.nesting_level);
 
         size_t w_size = 0;
-        // TODO: maybe we can avoid this.
-        bool success = dr_safe_write((uint64_t *)cur_store.addr, cur_store.size,
-                                     (byte *)cur_store.val, &w_size);
+        // FIXME: maybe we can avoid this.
+        bool success =
+            dr_safe_write((byte *)cur_store.addr, sizeof(uint64_t), &cur_store.val, &w_size);
     }
 
     // update the state machine that tracks the speculation process
@@ -122,7 +123,7 @@ pc_t SpeculatorABC::rollback(dr_mcontext_t *mc)
     }
 
     // dr_printf("[INFO] SpeculatorABC::rollback: Rolling back to pc %llx\n",
-    //           (long long)checkpoint.rollback_pc);
+    //   (long long)checkpoint.rollback_pc);
     return checkpoint.rollback_pc;
 }
 
@@ -146,33 +147,57 @@ pc_t SpeculatorABC::handle_instruction(instr_obs_t instr, dr_mcontext_t *mc, voi
     return 0;
 }
 
+static void log_mem(bool is_write, void *address, uint64_t size)
+{
+    uint64_t cur_val = 0;
+    size_t w_size = 0;
+    bool success = dr_safe_read(address, sizeof(uint64_t), &cur_val, &w_size);
+
+    if (not success) {
+        dr_printf("[MEM] Aborted - is_write:%d  addr: %lx  sz:%d\n", (int)is_write, address, size);
+    } else {
+        if (is_write)
+            dr_printf("[MEM] Write - addr: %lx  sz:%d  val:%lx\n", address, size, cur_val);
+        else
+            dr_printf("[MEM] Read -  addr: %lx  sz:%d  val:%lx\n", address, size, cur_val);
+    }
+}
+
 void SpeculatorABC::handle_mem_access(bool is_write, void *address, uint64_t size)
 {
-
-    // if (not success)
-    //     dr_printf("[MEM] unsuccessful memory op - addr: %lx  sz:%d\n", address, size);
-    // else {
-    //     if (is_write)
-    //         dr_printf("[MEM] Write - addr: %lx  sz:%d  val:%lx\n", address, size,
-    //                   *(uint64_t *)entry.val);
-    //     else
-    //         dr_printf("[MEM] Read -  addr: %lx  sz:%d  val:%lx\n", address, size,
-    //                   *(uint64_t *)entry.val);
-    // }
-
+    // log_mem(is_write, address, size);
     if (not in_speculation)
         return;
 
     // record changes made to the memory
     if (is_write) {
-        //  NOTE: on speculative paths, safe reads are the only way to load
-        // from memory, since pointers might be invalid all the time.
-        store_log_entry_t entry{.addr = (uint64_t)address, .nesting_level = nesting};
-        bool success = dr_safe_read((uint64_t *)address, size, (byte *)entry.val, &entry.size);
-        if (success) {
-            store_log.push_back(entry);
+        size_t qword_size = size / sizeof(uint64_t);
+        if (size % sizeof(uint64_t) != 0)
+            qword_size += 1;
+
+        size_t r_size = 0;
+        uint64_t val_ptr[8];
+        bool success = dr_safe_read(address, qword_size * 8, (byte *)val_ptr, &r_size);
+        if (not success)
+            // SEGFAULT will be handled by the exception event.
+            return;
+
+        uint8_t cur_idx = 0;
+        while (cur_idx < qword_size) {
+            // Read 64 bits at a time.
+            // NOTE: on speculative paths, safe reads are the only way to load
+            // from memory, since pointers might be invalid.
+            store_log.push_back({
+                .addr = (uint64_t)address + (cur_idx * 8),
+                .val = val_ptr[cur_idx],
+                .nesting_level = nesting,
+            });
             // dr_printf("[STORELOG] Pushing *%lx = %lx (nest: %d, sz: %d) \n", (uint64_t)address,
-            //           *(uint64_t *)entry.val, nesting, size);
+            //           store_log.back().val, nesting, qword_size);
+
+            // Some writes can be greater than 8 bytes (e.g. vector registers spilling)
+            // Insert multiple 64-bit entries in these cases
+            cur_idx += 1;
         }
     }
 }

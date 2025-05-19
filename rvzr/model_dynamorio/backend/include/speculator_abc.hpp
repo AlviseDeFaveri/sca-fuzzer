@@ -29,9 +29,8 @@ typedef struct {
 
 typedef struct {
     uint64_t addr;
-    uint8_t val[512];
+    uint64_t val;
     unsigned int nesting_level;
-    size_t size;
 } store_log_entry_t;
 
 // =================================================================================================
