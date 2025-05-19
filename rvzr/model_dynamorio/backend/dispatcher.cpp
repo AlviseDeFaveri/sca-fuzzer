@@ -138,19 +138,6 @@ static void dispatch_callback(uint64_t opcode, uint64_t pc, uint64_t has_mem_ref
     dr_set_mcontext(drcontext, &mc);
 }
 
-bool Dispatcher::handle_syscall(void *drcontext, int sysnum)
-{
-    // dr_printf("[SYS] Dispatcher::handle_syscall: syscall %d\n", sysnum);
-    if (!module_bundle->speculator->in_speculation) {
-        // dr_printf("[SYS] Dispatcher::handle_syscall: syscall on a non-speculative path\n");
-        return true; /* execute normally */
-    }
-    // dr_printf("[SYS] Dispatcher::handle_syscall: is speculative, skipping\n");
-
-    module_bundle->speculator->defer_rollback();
-    return false; /* skip syscall */
-}
-
 bool Dispatcher::handle_exception(void * /*drcontext*/, dr_siginfo_t *siginfo)
 {
     // dr_printf("[XCPT] Dispatcher::handle_exception: exception %d\n", siginfo->sig);
@@ -223,7 +210,7 @@ dr_emit_flags_t Dispatcher::instrument_instruction(void *drcontext, instrlist_t 
 // =================================================================================================
 // Constructors and Destructors
 // =================================================================================================
-Dispatcher::Dispatcher(cli_args_t *cli_args) : instrumentation_on(true)
+Dispatcher::Dispatcher(cli_args_t *cli_args)
 {
     // Create service modules
     module_bundle = std::make_unique<module_bundle_t>();
