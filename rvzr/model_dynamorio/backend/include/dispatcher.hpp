@@ -64,8 +64,6 @@ class Dispatcher
     /// @return True if the exception has been handled (control-flow should be redirected)
     bool handle_exception(void *drcontext, dr_siginfo_t *siginfo);
 
-    bool handle_syscall(void *drcontext, int sysnum);
-
   protected:
     // ---------------------------------------------------------------------------------------------
     // Protected Fields

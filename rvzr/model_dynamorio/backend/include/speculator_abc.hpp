@@ -57,9 +57,6 @@ class SpeculatorABC
 
     /// @param Boolean flag indicating whether the speculator is currently active
     bool in_speculation = false;
-    bool should_rollback = false;
-
-    void defer_rollback() { should_rollback = true; }
 
     // ---------------------------------------------------------------------------------------------
     // Public Methods

@@ -150,16 +150,6 @@ static dr_signal_action_t event_signal(void *drcontext, dr_siginfo_t *siginfo)
     return DR_SIGNAL_DELIVER;
 }
 
-static bool event_pre_syscall(void *drcontext, int sysnum)
-{
-    return dispatcher->handle_syscall(drcontext, sysnum);
-}
-
-static bool event_filter_syscall(void *drcontext, int sysnum)
-{
-    return true; /* intercept everything */
-}
-
 /// @brief Callback executed before exiting the application.
 /// @return void
 void event_exit()
@@ -209,8 +199,6 @@ void dr_model_init()
         throw std::runtime_error("ERROR: failed to register a callback\n");
 
     drmgr_register_signal_event(event_signal);
-    dr_register_filter_syscall_event(event_filter_syscall);
-    drmgr_register_pre_syscall_event(event_pre_syscall);
     dr_register_exit_event(event_exit);
 }
 

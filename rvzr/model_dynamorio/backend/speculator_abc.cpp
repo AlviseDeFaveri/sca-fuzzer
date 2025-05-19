@@ -39,17 +39,10 @@ static constexpr const std::array<uint64_t, 18> serializing_opcodes = {
     // on speculative syscall instructions.
     OP_syscall};
 
-// static bool is_speculation_barrier(const uint64_t opcode)
-// {
-//     return std::any_of(serializing_opcodes.begin(), serializing_opcodes.end(),
-//                        [&opcode](const uint64_t barrier) { return opcode == barrier; });
-// }
-
 static bool is_speculation_barrier(const uint64_t opcode)
 {
-    return opcode == OP_lfence || opcode == OP_mfence || opcode == OP_sfence;
-    //  ||
-    //        opcode == OP_syscall;
+    return std::any_of(serializing_opcodes.begin(), serializing_opcodes.end(),
+                       [&opcode](const uint64_t barrier) { return opcode == barrier; });
 }
 
 // =================================================================================================
@@ -140,12 +133,6 @@ pc_t SpeculatorABC::handle_instruction(instr_obs_t instr, dr_mcontext_t *mc, voi
         return 0;
 
     // rollback if we hit a speculation barrier
-    if (should_rollback) {
-        should_rollback = false;
-        return rollback(mc);
-    }
-
-    // rollback if we hit a speculation barrier
     if (is_speculation_barrier(instr.opcode)) {
         return rollback(mc);
     }
@@ -186,12 +173,6 @@ void SpeculatorABC::handle_mem_access(bool is_write, void *address, uint64_t siz
             store_log.push_back(entry);
             // dr_printf("[STORELOG] Pushing *%lx = %lx (nest: %d, sz: %d) \n", (uint64_t)address,
             //           *(uint64_t *)entry.val, nesting, size);
-
-        } else {
-            if (not in_speculation) {
-                dr_printf("[ERROR] handle_mem_access: segfault on a non-speculative path\n");
-                dr_abort();
-            }
         }
     }
 }
