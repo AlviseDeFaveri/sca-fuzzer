@@ -37,7 +37,7 @@ static constexpr const std::array<uint64_t, 18> serializing_opcodes = {
     OP_wbinvd, OP_wrmsr,
     // Non-privileged serializing instructions
     OP_cpuid, OP_iret, OP_rsm, OP_serialize,
-    // NOTE: syscalls are not inatrumented by Dynamorio, this makes sure that speculation is aborted
+    // NOTE: syscalls are not instrumented by Dynamorio, this makes sure that speculation is aborted
     // on speculative syscall instructions.
     OP_syscall};
 
