@@ -114,9 +114,8 @@ dr_emit_flags_t event_bb_instrumentation(void *drcontext, void * /*tag*/, instrl
 /// @return void
 void event_instrumentation_start(void *wrapctx, DR_PARAM_OUT void **user_data)
 {
-    // dr_printf("======= INSTRUMENTATION STARTED ============\n");
     // FIXME: Restrict the flushing to only useful stuff.
-    dr_delay_flush_region((byte *)0, (size_t)-1, 0, NULL);
+    dr_delay_flush_region((byte *)0, (size_t)-1, 0, nullptr);
     dispatcher->start(wrapctx, user_data);
 }
 
@@ -126,10 +125,9 @@ void event_instrumentation_start(void *wrapctx, DR_PARAM_OUT void **user_data)
 /// @return void
 void event_instrumentation_end(void *wrapctx, void *user_data)
 {
-    // dr_printf("======= INSTRUMENTATION ENDED ============\n");
     dispatcher->finalize(wrapctx, user_data);
     // FIXME: Restrict the flushing to only useful stuff.
-    dr_delay_flush_region((byte *)0, (size_t)-1, 0, NULL);
+    dr_delay_flush_region((byte *)0, (size_t)-1, 0, nullptr);
 }
 
 /// @brief Callback executed upon exceptions
@@ -140,7 +138,7 @@ void event_instrumentation_end(void *wrapctx, void *user_data)
 /// continue with the default exception handling
 static dr_signal_action_t event_signal(void *drcontext, dr_siginfo_t *siginfo)
 {
-    // dr_printf("[SIG] Signal received: %lx\n", siginfo->sig);
+    // dr_printf("[INFO] Signal received: %lx\n", siginfo->sig);
 
     if (dispatcher->handle_exception(drcontext, siginfo)) {
         return DR_SIGNAL_REDIRECT;

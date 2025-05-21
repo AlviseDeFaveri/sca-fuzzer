@@ -15,6 +15,8 @@ struct cli_args_t {
     std::string bin_output;
     std::string debug_output;
     bool print_trace;
+    bool print_dbg_trace;
+    bool enable_dbg_trace;
     std::string speculator_type;
     int max_nesting;
     int max_spec_window;

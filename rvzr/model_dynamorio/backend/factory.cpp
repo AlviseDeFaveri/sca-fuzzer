@@ -27,21 +27,24 @@ using std::vector;
 namespace
 {
 
-const std::unordered_map<string,
-                         function<unique_ptr<TracerABC>(const string &, bool, const string &)>>
-    tracer_factories = {
-        {
-            "ct",
-            [](const string &out_file, bool print_trace, const string &dbg_file) {
-                return std::make_unique<TracerCT>(out_file, print_trace, dbg_file);
-            },
-        },
-        {
-            "pc",
-            [](const string &out_file, bool print_trace, const string &dbg_out_file) {
-                return std::make_unique<TracerPC>(out_file, print_trace, dbg_out_file);
-            },
-        }};
+const std::unordered_map<
+    string, function<unique_ptr<TracerABC>(const string &, bool, const string &, bool, bool)>>
+    tracer_factories = {{
+                            "ct",
+                            [](const string &out_path, bool print_output, const string &dbg_path,
+                               bool print_dbg, bool enable_dbg_trace) {
+                                return std::make_unique<TracerCT>(out_path, print_output, dbg_path,
+                                                                  print_dbg, enable_dbg_trace);
+                            },
+                        },
+                        {
+                            "pc",
+                            [](const string &out_path, bool print_output, const string &dbg_path,
+                               bool print_dbg, bool enable_dbg_trace) {
+                                return std::make_unique<TracerPC>(out_path, print_output, dbg_path,
+                                                                  print_dbg, enable_dbg_trace);
+                            },
+                        }};
 
 const std::unordered_map<string, function<unique_ptr<SpeculatorABC>(int, int)>>
     speculator_factories = {
@@ -60,11 +63,13 @@ const std::unordered_map<string, function<unique_ptr<SpeculatorABC>(int, int)>>
 
 } // namespace
 
-unique_ptr<TracerABC> create_tracer(const string &tracer_type, const string &out_file,
-                                    bool print_trace, const string &dbg_file)
+unique_ptr<TracerABC> create_tracer(const string &tracer_type, const string &out_path,
+                                    bool print_output, const string &dbg_path, bool print_dbg,
+                                    bool enable_dbg_trace)
 {
     try {
-        return tracer_factories.at(tracer_type)(out_file, print_trace, dbg_file);
+        return tracer_factories.at(tracer_type)(out_path, print_output, dbg_path, print_dbg,
+                                                enable_dbg_trace);
     } catch (const std::out_of_range &e) {
         throw std::invalid_argument("Unexpected tracer type: " + tracer_type);
     }

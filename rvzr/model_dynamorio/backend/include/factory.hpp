@@ -22,8 +22,9 @@
 /// @return A unique pointer to the created tracer instance
 /// @throw std::invalid_argument if the tracer name is unknown
 std::unique_ptr<TracerABC> create_tracer(const std::string &tracer_type,
-                                         const std::string &out_file, bool print_trace,
-                                         const std::string &dbg_file);
+                                         const std::string &out_path, bool print_output,
+                                         const std::string &dbg_path, bool print_dbg,
+                                         bool enable_dbg_trace);
 
 /// @brief Get a list of all available tracers
 /// @return A list of all available tracers

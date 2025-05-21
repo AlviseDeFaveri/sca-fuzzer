@@ -41,13 +41,25 @@ struct trace_entry_t {
 
 struct dbg_trace_entry_t {
     trace_entry_type_t type; // always ENTRY_REG_DUMP
-    uint64_t xax;
-    uint64_t xbx;
-    uint64_t xcx;
-    uint64_t xdx;
-    uint64_t xsi;
-    uint64_t xdi;
-    pc_t pc;
+
+    union {
+        // ENTRY_REG_DUMP
+        struct {
+            uint64_t xax;
+            uint64_t xbx;
+            uint64_t xcx;
+            uint64_t xdx;
+            uint64_t xsi;
+            uint64_t xdi;
+            pc_t pc;
+        } regs;
+        // ENTRY_MEM (read or write)
+        struct {
+            uint64_t address;
+            uint64_t value;
+            uint64_t size;
+        } mem;
+    };
 };
 
 // =================================================================================================
@@ -58,7 +70,8 @@ struct dbg_trace_entry_t {
 class TracerABC
 {
   public:
-    TracerABC(const std::string &out_path, bool print_output_, const std::string &dbg_path = "");
+    TracerABC(const std::string &out_path, bool print_output_, const std::string &dbg_path,
+              bool print_dbg_, bool enable_dbg_trace_);
     virtual ~TracerABC() = default;
     TracerABC(const TracerABC &) = delete;
     TracerABC &operator=(const TracerABC &) = delete;
@@ -111,8 +124,11 @@ class TracerABC
     // ---------------------------------------------------------------------------------------------
     // Protected Fields
 
-    /// @param If true, prints all trace entries to STDOUT in ascii format
+    /// @param If true, the tracer will print all entries to STDOUT at the end of a run
     bool print_output = false;
+
+    /// @param If true, the tracer will print all debug entries to STDERR at the end of a run
+    bool print_dbg = false;
 
     /// @param If true, the tracer will collect data for Revizor's model debug mode
     bool enable_dbg_trace = false;

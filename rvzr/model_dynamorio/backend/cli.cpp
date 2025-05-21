@@ -31,50 +31,65 @@ static const int max_reasonable_spec_window = 1000;
 // =================================================================================================
 namespace
 {
-
+// clang-format off
 // General Configuration
 
 // Tracer Configuration
-const droption_t<string>
-    op_tracer_name(DROPTION_SCOPE_CLIENT, "tracer", "ct",
-                   "Type of the tracer; equivalent to the observation clause of a contract",
-                   "Type of the tracer; equivalent to the observation clause of a contract");
-const droption_t<string> op_instrumented_func(DROPTION_SCOPE_CLIENT, "instrumented-func",
-                                              "__libc_start_main",
-                                              "Name of the function to instrument.",
-                                              "Name of the function to instrument.");
-const droption_t<string> op_bin_output(DROPTION_SCOPE_CLIENT, "output", "rvzr_trace.dat",
-                                       "Path of the trace output file.",
-                                       "Path of the trace output file.");
-const droption_t<bool> op_print_trace(DROPTION_SCOPE_CLIENT, "print-trace", false,
-                                      "Print the trace to stdout as well.",
-                                      "Print the trace to stdout as well.");
-const droption_t<string>
-    op_debug_output(DROPTION_SCOPE_CLIENT, "debug-output", "",
-                    "Collect detailed trace from Revizor and save it to a file.",
-                    "Collect detailed trace from Revizor and save it to a file.");
+const droption_t<string> op_tracer_name(DROPTION_SCOPE_CLIENT,
+                        "tracer", "ct",
+                        "Type of the tracer; equivalent to the observation clause of a contract",
+                        "Type of the tracer; equivalent to the observation clause of a contract");
+const droption_t<string> op_instrumented_func(DROPTION_SCOPE_CLIENT,
+                        "instrumented-func", "__libc_start_main",
+                        "Name of the function to instrument.",
+                        "Name of the function to instrument.");
+const droption_t<string> op_bin_output(DROPTION_SCOPE_CLIENT,
+                        "bin-output", "rvzr_trace.dat",
+                        "Save the trace to a file (in binary format).",
+                        "Save the trace to a file (in binary format).");
+
+// Trace Debugging
+const droption_t<bool>   op_print_trace(DROPTION_SCOPE_CLIENT,
+                        "print-trace", false,
+                        "Print the trace to stdout after tracing (in ASCII format).",
+                        "Print the trace to stdout after tracing (in ASCII format).");
+const droption_t<bool>   op_enable_debug_trace(DROPTION_SCOPE_CLIENT,
+                        "enable-debug-trace", false,
+                        "Collect a more verbose trace.",
+                        "Collect a more verbose trace.");
+const droption_t<string> op_debug_output(DROPTION_SCOPE_CLIENT,
+                        "debug-output", "rvzr_dbg_trace.dat",
+                        "Save the debug trace to a file (in binary format).",
+                        "Save the debug trace to a file (in binary format).");
+const droption_t<bool>   op_print_debug_trace(DROPTION_SCOPE_CLIENT,
+                        "print-debug-trace", false,
+                        "Print the debug trace to stderr after tracing (in ASCII format).",
+                        "Print the debug trace to stderr after tracing (in ASCII format).");
 
 // Speculator Configuration
-const droption_t<string>
-    op_speculator_name(DROPTION_SCOPE_CLIENT, "speculator", "seq",
-                       "Type of the speculator; equivalent to the execution clause of a contract",
-                       "Type of the speculator; equivalent to the execution clause of a contract");
-const droption_t<int> op_max_nesting(DROPTION_SCOPE_CLIENT, "max-nesting", 1,
-                                     "Maximum number of nested speculations.",
-                                     "Maximum number of nested speculations.");
-const droption_t<int> op_max_spec_window(DROPTION_SCOPE_CLIENT, "max-spec-window", 250,
-                                         "Maximum number of speculative instructions.",
-                                         "Maximum number of speculative instructions.");
+const droption_t<string> op_speculator_name(DROPTION_SCOPE_CLIENT,
+                        "speculator", "seq",
+                        "Type of the speculator; equivalent to the execution clause of a contract",
+                        "Type of the speculator; equivalent to the execution clause of a contract");
+const droption_t<int>    op_max_nesting(DROPTION_SCOPE_CLIENT,
+                        "max-nesting", 1,
+                        "Maximum number of nested speculations.",
+                        "Maximum number of nested speculations.");
+const droption_t<int>    op_max_spec_window(DROPTION_SCOPE_CLIENT,
+                        "max-spec-window", 250,
+                        "Maximum number of speculative instructions.",
+                        "Maximum number of speculative instructions.");
 
 // Listing Options
-const droption_t<bool> op_list_tracers(DROPTION_SCOPE_CLIENT, "list-tracers", false,
-                                       "List all available tracers (aka, observation clauses).",
-                                       "List all available tracers (aka, observation clauses).");
-const droption_t<bool>
-    op_list_speculators(DROPTION_SCOPE_CLIENT, "list-speculators", false,
+const droption_t<bool> op_list_tracers(DROPTION_SCOPE_CLIENT,
+                        "list-tracers", false,
+                        "List all available tracers (aka, observation clauses).",
+                        "List all available tracers (aka, observation clauses).");
+const droption_t<bool> op_list_speculators(DROPTION_SCOPE_CLIENT,
+                        "list-speculators", false,
                         "List all available speculators (aka execution clauses).",
                         "List all available speculators (aka execution clauses).");
-
+// clang-format on
 } // namespace
 
 // =================================================================================================
@@ -102,6 +117,8 @@ void parse_cli(int argc, const char **argv, DR_PARAM_OUT cli_args_t &parsed_args
     parsed_args.bin_output = op_bin_output.get_value();
     parsed_args.debug_output = op_debug_output.get_value();
     parsed_args.print_trace = op_print_trace.get_value();
+    parsed_args.print_dbg_trace = op_print_debug_trace.get_value();
+    parsed_args.enable_dbg_trace = op_enable_debug_trace.get_value();
     parsed_args.speculator_type = op_speculator_name.get_value();
     parsed_args.max_nesting = op_max_nesting.get_value();
     parsed_args.max_spec_window = op_max_spec_window.get_value();

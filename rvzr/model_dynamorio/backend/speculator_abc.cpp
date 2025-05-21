@@ -100,9 +100,6 @@ pc_t SpeculatorABC::rollback(dr_mcontext_t *mc)
         if (cur_store.nesting_level < nesting)
             break;
 
-        // dr_printf("[Rollback] Writing val: 0x%lx to addr: 0x%lx (nest: %d, sz: %d)\n",
-        //           cur_store.val, cur_store.addr, cur_store.nesting_level);
-
         size_t w_size = 0;
         // FIXME: maybe we can avoid this.
         bool success =
@@ -121,9 +118,6 @@ pc_t SpeculatorABC::rollback(dr_mcontext_t *mc)
             dr_abort();
         }
     }
-
-    // dr_printf("[INFO] SpeculatorABC::rollback: Rolling back to pc %llx\n",
-    //   (long long)checkpoint.rollback_pc);
     return checkpoint.rollback_pc;
 }
 
@@ -147,25 +141,8 @@ pc_t SpeculatorABC::handle_instruction(instr_obs_t instr, dr_mcontext_t *mc, voi
     return 0;
 }
 
-static void log_mem(bool is_write, void *address, uint64_t size)
-{
-    uint64_t cur_val = 0;
-    size_t w_size = 0;
-    bool success = dr_safe_read(address, sizeof(uint64_t), &cur_val, &w_size);
-
-    if (not success) {
-        dr_printf("[MEM] Aborted - is_write:%d  addr: %lx  sz:%d\n", (int)is_write, address, size);
-    } else {
-        if (is_write)
-            dr_printf("[MEM] Write - addr: %lx  sz:%d  val:%lx\n", address, size, cur_val);
-        else
-            dr_printf("[MEM] Read -  addr: %lx  sz:%d  val:%lx\n", address, size, cur_val);
-    }
-}
-
 void SpeculatorABC::handle_mem_access(bool is_write, void *address, uint64_t size)
 {
-    // log_mem(is_write, address, size);
     if (not in_speculation)
         return;
 
@@ -192,8 +169,6 @@ void SpeculatorABC::handle_mem_access(bool is_write, void *address, uint64_t siz
                 .val = val_ptr[cur_idx],
                 .nesting_level = nesting,
             });
-            // dr_printf("[STORELOG] Pushing *%lx = %lx (nest: %d, sz: %d) \n", (uint64_t)address,
-            //           store_log.back().val, nesting, qword_size);
 
             // Some writes can be greater than 8 bytes (e.g. vector registers spilling)
             // Insert multiple 64-bit entries in these cases
