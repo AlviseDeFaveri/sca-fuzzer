@@ -19,17 +19,16 @@ class TracerCT : public TracerABC
     using TracerABC::TracerABC;
 
     /// @brief Record the PC of the executed instruction on the contract trace
-    /// @param opcode unused
-    /// @param pc The program counter of the executed instruction
-    /// @param mc unused
+    /// @param instr The instruction being executed
+    /// @param mc The machine context of the instruction
+    /// @param in_speculation Is the current instruction speculative
     /// @return void
-    void observe_instruction(instr_obs_t instr, dr_mcontext_t *mc) override;
+    void observe_instruction(instr_obs_t instr, dr_mcontext_t *mc, bool in_speculation) override;
 
     /// @brief Record the memory access
-    /// @param type The type of the memory access (read or write)
+    /// @param is_write The type of the memory access (read or write)
     /// @param address The address of the memory access
     /// @param size The size of the memory access
-    /// @param value The value of the memory access
     /// @return void
     void observe_mem_access(bool is_write, void *address, uint64_t size) override;
 };

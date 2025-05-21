@@ -38,7 +38,7 @@ static module_bundle_t *glob_module_bundle = nullptr; // NOLINT
 static pc_t instruction_dispatch(dr_mcontext_t *mc, void *dc, const module_bundle_t *bundle,
                                  instr_obs_t instr)
 {
-    bundle->tracer->observe_instruction(instr, mc);
+    bundle->tracer->observe_instruction(instr, mc, bundle->speculator->in_speculation);
     const pc_t next_pc = bundle->speculator->handle_instruction(instr, mc, dc);
     return next_pc;
 }

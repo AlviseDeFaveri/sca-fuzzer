@@ -137,7 +137,7 @@ void TracerABC::tracing_finalize(void * /*wrapctx*/, DR_PARAM_OUT void * /*user_
     tracing_finalized = true;
 }
 
-void TracerABC::observe_instruction(instr_obs_t instr, dr_mcontext_t *mc)
+void TracerABC::observe_instruction(instr_obs_t instr, dr_mcontext_t *mc, bool in_speculation)
 {
     // Nothing to do if tracing is off
     if (not tracing_on) {
