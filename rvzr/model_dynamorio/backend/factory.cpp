@@ -27,19 +27,21 @@ using std::vector;
 namespace
 {
 
-const std::unordered_map<string, function<unique_ptr<TracerABC>(bool, bool)>> tracer_factories = {
-    {
-        "ct",
-        [](bool enable_dbg_trace, bool enable_bin_output) {
-            return std::make_unique<TracerCT>(enable_dbg_trace, enable_bin_output);
+const std::unordered_map<string,
+                         function<unique_ptr<TracerABC>(const string &, bool, const string &)>>
+    tracer_factories = {
+        {
+            "ct",
+            [](const string &out_file, bool print_trace, const string &dbg_file) {
+                return std::make_unique<TracerCT>(out_file, print_trace, dbg_file);
+            },
         },
-    },
-    {
-        "pc",
-        [](bool enable_dbg_trace, bool enable_bin_output) {
-            return std::make_unique<TracerPC>(enable_dbg_trace, enable_bin_output);
-        },
-    }};
+        {
+            "pc",
+            [](const string &out_file, bool print_trace, const string &dbg_out_file) {
+                return std::make_unique<TracerPC>(out_file, print_trace, dbg_out_file);
+            },
+        }};
 
 const std::unordered_map<string, function<unique_ptr<SpeculatorABC>(int, int)>>
     speculator_factories = {
@@ -58,11 +60,11 @@ const std::unordered_map<string, function<unique_ptr<SpeculatorABC>(int, int)>>
 
 } // namespace
 
-unique_ptr<TracerABC> create_tracer(const string &tracer_type, bool enable_dbg_trace,
-                                    bool enable_bin_output)
+unique_ptr<TracerABC> create_tracer(const string &tracer_type, const string &out_file,
+                                    bool print_trace, const string &dbg_file)
 {
     try {
-        return tracer_factories.at(tracer_type)(enable_dbg_trace, enable_bin_output);
+        return tracer_factories.at(tracer_type)(out_file, print_trace, dbg_file);
     } catch (const std::out_of_range &e) {
         throw std::invalid_argument("Unexpected tracer type: " + tracer_type);
     }

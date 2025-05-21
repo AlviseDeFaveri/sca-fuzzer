@@ -16,10 +16,14 @@
 
 /// @brief Create a tracer instance based on the tracer name
 /// @param tracer_name The name of the tracer to create
+/// @param out_file The path of the trace output file
+/// @param print_trace Whether the trace should also be printed to stdout
+/// @param dbg_file The path of the debug file (can be empty)
 /// @return A unique pointer to the created tracer instance
 /// @throw std::invalid_argument if the tracer name is unknown
-std::unique_ptr<TracerABC> create_tracer(const std::string &tracer_type, bool enable_dbg_trace,
-                                         bool enable_bin_output);
+std::unique_ptr<TracerABC> create_tracer(const std::string &tracer_type,
+                                         const std::string &out_file, bool print_trace,
+                                         const std::string &dbg_file);
 
 /// @brief Get a list of all available tracers
 /// @return A list of all available tracers

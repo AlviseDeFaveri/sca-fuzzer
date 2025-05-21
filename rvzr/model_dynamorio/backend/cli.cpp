@@ -43,12 +43,16 @@ const droption_t<string> op_instrumented_func(DROPTION_SCOPE_CLIENT, "instrument
                                               "__libc_start_main",
                                               "Name of the function to instrument.",
                                               "Name of the function to instrument.");
-const droption_t<bool> op_debug_trace(DROPTION_SCOPE_CLIENT, "enable-debug-trace", false,
-                                      "Collect detailed trace for debugging with Revizor",
-                                      "Collect detailed trace for debugging with Revizor");
-const droption_t<bool> op_bin_output(DROPTION_SCOPE_CLIENT, "enable-bin-output", false,
-                                     "Print results in raw binary format.",
-                                     "Print results in raw binary format.");
+const droption_t<string> op_bin_output(DROPTION_SCOPE_CLIENT, "output", "rvzr_trace.dat",
+                                       "Path of the trace output file.",
+                                       "Path of the trace output file.");
+const droption_t<bool> op_print_trace(DROPTION_SCOPE_CLIENT, "print-trace", false,
+                                      "Print the trace to stdout as well.",
+                                      "Print the trace to stdout as well.");
+const droption_t<string>
+    op_debug_output(DROPTION_SCOPE_CLIENT, "debug-output", "",
+                    "Collect detailed trace from Revizor and save it to a file.",
+                    "Collect detailed trace from Revizor and save it to a file.");
 
 // Speculator Configuration
 const droption_t<string>
@@ -95,8 +99,9 @@ void parse_cli(int argc, const char **argv, DR_PARAM_OUT cli_args_t &parsed_args
     // Set the parsed arguments
     parsed_args.tracer_type = op_tracer_name.get_value();
     parsed_args.instrumented_func = op_instrumented_func.get_value();
-    parsed_args.enable_debug_trace = op_debug_trace.get_value();
-    parsed_args.enable_bin_output = op_bin_output.get_value();
+    parsed_args.bin_output = op_bin_output.get_value();
+    parsed_args.debug_output = op_debug_output.get_value();
+    parsed_args.print_trace = op_print_trace.get_value();
     parsed_args.speculator_type = op_speculator_name.get_value();
     parsed_args.max_nesting = op_max_nesting.get_value();
     parsed_args.max_spec_window = op_max_spec_window.get_value();

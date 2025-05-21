@@ -12,8 +12,9 @@
 struct cli_args_t {
     std::string tracer_type;
     std::string instrumented_func;
-    bool enable_debug_trace;
-    bool enable_bin_output;
+    std::string bin_output;
+    std::string debug_output;
+    bool print_trace;
     std::string speculator_type;
     int max_nesting;
     int max_spec_window;
