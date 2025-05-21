@@ -168,4 +168,14 @@ void TracerABC::observe_instruction(instr_obs_t instr, dr_mcontext_t *mc, bool i
     // The rest of the functionality - if any - is implemented by subclasses
 }
 
-void TracerABC::observe_mem_access(bool is_write, void *address, uint64_t size) {}
+void TracerABC::observe_mem_access(bool is_write, void *address, uint64_t size)
+{
+    if (enable_dbg_trace) {
+        const dbg_trace_entry_t entry = {
+            .type = is_write ? trace_entry_type_t::ENTRY_WRITE : trace_entry_type_t::ENTRY_READ,
+            .xax = size,
+            .pc = (uint64_t)address,
+        };
+        dbg_trace.push_back(entry);
+    }
+}

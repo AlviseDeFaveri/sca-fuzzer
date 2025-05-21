@@ -6,7 +6,11 @@
 
 #pragma once
 
+#include "util.hpp"
+#include <array>
+#include <cstddef>
 #include <cstdint>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -17,8 +21,6 @@
 
 #include "observables.hpp"
 
-using std::uint64_t;
-
 // =================================================================================================
 // Constants and Types
 // =================================================================================================
@@ -27,7 +29,8 @@ enum class trace_entry_type_t : uint8_t {
     ENTRY_PC = 1,
     ENTRY_READ = 2,
     ENTRY_WRITE = 3,
-    ENTRY_REG_DUMP = 4
+    ENTRY_REG_DUMP_ARCH = 4,
+    ENTRY_REG_DUMP_SPEC = 5
 };
 
 struct trace_entry_t {
