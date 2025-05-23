@@ -98,13 +98,9 @@ template <typename T> static void dump_from_file(const std::string &filename, co
 // =================================================================================================
 // Constructors and Destructors
 // =================================================================================================
-TracerABC::TracerABC(const std::string &out_path, bool print_output_, const std::string &dbg_path,
-                     bool print_dbg_, bool enable_dbg_trace_)
-    : print_output(print_output_), print_dbg(print_dbg_), enable_dbg_trace(enable_dbg_trace_)
+TracerABC::TracerABC(const std::string &out_path, Logger &logger) : logger(logger)
 {
     trace.open(out_path);
-    if (enable_dbg_trace)
-        dbg_trace.open(dbg_path);
 }
 
 // =================================================================================================
@@ -121,69 +117,27 @@ void TracerABC::tracing_finalize(void * /*wrapctx*/, DR_PARAM_OUT void * /*user_
     if (tracing_finalized) {
         return;
     }
-    dr_printf("Done Tracing!\n");
 
-    // Reset the trace buffers
+    // Flush the trace buffer
+    dr_printf("Done Tracing!\n");
     trace.clear();
-    dbg_trace.clear();
 
     // Tell the user where to find the trace(s)
     dr_printf("Trace saved to %s\n", trace.get_filename().c_str());
-    if (enable_dbg_trace)
-        dr_printf("Debug trace saved to %s\n", dbg_trace.get_filename().c_str());
 
-    // Optionally, print a string representation of the traces
-    if (print_output)
-        dump_from_file<trace_entry_t>(trace.get_filename(), STDOUT);
-    if (enable_dbg_trace and print_dbg)
-        dump_from_file<dbg_trace_entry_t>(dbg_trace.get_filename(), STDERR);
-
-    // Reset the tracing flag
+    // Reset tracing flags
     tracing_on = false;
     tracing_finalized = true;
 }
 
 void TracerABC::observe_instruction(instr_obs_t instr, dr_mcontext_t *mc, bool in_speculation)
 {
-    // Nothing to do if tracing is off
-    if (not tracing_on) {
-        return;
-    }
-
-    // In debug mode, store the register values and PC on the debug trace buffer
-    if (enable_dbg_trace) {
-        const dbg_trace_entry_t entry = {.type = in_speculation
-                                                     ? trace_entry_type_t::ENTRY_REG_DUMP_SPEC
-                                                     : trace_entry_type_t::ENTRY_REG_DUMP_ARCH,
-                                         .regs{
-                                             .xax = mc->xax,
-                                             .xbx = mc->xbx,
-                                             .xcx = mc->xcx,
-                                             .xdx = mc->xdx,
-                                             .xsi = mc->xsi,
-                                             .xdi = mc->xdi,
-                                             .pc = instr.pc,
-                                         }};
-        dbg_trace.push_back(entry);
-    }
-
+    logger.log_instruction(instr, mc, in_speculation);
     // The rest of the functionality - if any - is implemented by subclasses
 }
 
 void TracerABC::observe_mem_access(bool is_write, void *address, uint64_t size)
 {
-    if (enable_dbg_trace) {
-        uint64_t val = 0;
-        size_t w_size = 0;
-        bool success = dr_safe_read(address, sizeof(uint64_t), &val, &w_size);
-
-        const dbg_trace_entry_t entry = {.type = is_write ? trace_entry_type_t::ENTRY_WRITE
-                                                          : trace_entry_type_t::ENTRY_READ,
-                                         .mem{
-                                             .address = (uint64_t)address,
-                                             .value = val,
-                                             .size = size,
-                                         }};
-        dbg_trace.push_back(entry);
-    }
+    logger.log_mem_access(is_write, address, size);
+    // The rest of the functionality - if any - is implemented by subclasses
 }

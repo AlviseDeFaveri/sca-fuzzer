@@ -15,12 +15,12 @@
 #include <cstdint>
 #include <dr_api.h>
 
-#include "dr_defines.h"
-#include "dr_ir_opcodes_x86.h"
-#include "dr_tools.h"
+#include <dr_defines.h>
+#include <dr_ir_opcodes_x86.h>
+#include <dr_tools.h>
+
 #include "observables.hpp"
 #include "speculator_abc.hpp"
-#include "util.hpp"
 
 // =================================================================================================
 // Local helper functions
@@ -67,13 +67,12 @@ bool SpeculatorABC::skip_speculation() const
 
 void SpeculatorABC::checkpoint(dr_mcontext_t *mc, pc_t pc)
 {
-    // dr_printf("[INFO] SpeculatorABC::checkpoint: checkpointing at %llx\n", (long long)pc);
-
     // store the register state and the rollback address
     checkpoints.push_back({.rollback_pc = pc,
                            .spec_window = spec_window,
                            .mc = *mc,
                            .store_log_size = store_log.size()});
+    logger.log_checkpoint(pc, spec_window, store_log.size());
 
     // update the state machine that tracks the speculation proces
     in_speculation = true;
@@ -104,6 +103,7 @@ pc_t SpeculatorABC::rollback(dr_mcontext_t *mc)
         // FIXME: maybe we can avoid this.
         bool success =
             dr_safe_write((byte *)cur_store.addr, sizeof(uint64_t), &cur_store.val, &w_size);
+        logger.log_rollback_store(cur_store.addr, cur_store.val, w_size);
     }
 
     // update the state machine that tracks the speculation process
@@ -118,12 +118,13 @@ pc_t SpeculatorABC::rollback(dr_mcontext_t *mc)
             dr_abort();
         }
     }
+
+    logger.log_rollback(nesting, checkpoint.rollback_pc);
     return checkpoint.rollback_pc;
 }
 
 pc_t SpeculatorABC::handle_instruction(instr_obs_t instr, dr_mcontext_t *mc, void * /*dc*/)
 {
-    // dr_printf("[INFO] handling %lx\n", (long)instr.pc);
     if (not in_speculation)
         return 0;
 

@@ -12,6 +12,7 @@
 
 #include <dr_api.h> // NOLINT
 
+#include "logger.hpp"
 #include "observables.hpp"
 
 using std::uint64_t;
@@ -41,8 +42,8 @@ typedef struct {
 class SpeculatorABC
 {
   public:
-    SpeculatorABC(int max_nesting_, int max_spec_window_)
-        : max_nesting(max_nesting_), max_spec_window(max_spec_window_)
+    SpeculatorABC(int max_nesting_, int max_spec_window_, Logger &logger)
+        : max_nesting(max_nesting_), max_spec_window(max_spec_window_), logger(logger)
     {
     }
     virtual ~SpeculatorABC() = default;
@@ -127,6 +128,9 @@ class SpeculatorABC
 
     /// @param Current speculation window
     unsigned int spec_window = 0;
+
+    /// @param Used to log checkpoint and rollback events
+    Logger &logger;
 
     // ---------------------------------------------------------------------------------------------
     // Protected Methods

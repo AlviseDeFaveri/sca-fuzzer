@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -121,6 +122,9 @@ static void dispatch_callback(uint64_t opcode, uint64_t pc, uint64_t has_mem_ref
 
 bool Dispatcher::handle_exception(void * /*drcontext*/, dr_siginfo_t *siginfo)
 {
+    module_bundle->logger->log_exception(siginfo);
+
+    // Architectural exceptions are redirected to the program
     if (!module_bundle->speculator->in_speculation) {
         dr_printf("[XCPT] Dispatcher::handle_exception: exception on a non-speculative path\n");
         return false;
@@ -188,11 +192,12 @@ Dispatcher::Dispatcher(cli_args_t *cli_args)
 {
     // Create service modules
     module_bundle = std::make_unique<module_bundle_t>();
-    module_bundle->tracer = create_tracer(cli_args->tracer_type, cli_args->bin_output,
-                                          cli_args->print_trace, cli_args->debug_output,
-                                          cli_args->print_dbg_trace, cli_args->enable_dbg_trace);
-    module_bundle->speculator = create_speculator(cli_args->speculator_type, cli_args->max_nesting,
-                                                  cli_args->max_spec_window);
+    module_bundle->logger = create_logger(cli_args->debug_output, cli_args->log_level);
+    module_bundle->tracer =
+        create_tracer(cli_args->tracer_type, cli_args->trace_output, *module_bundle->logger);
+    module_bundle->speculator =
+        create_speculator(cli_args->speculator_type, cli_args->max_nesting,
+                          cli_args->max_spec_window, *module_bundle->logger);
 
     // Make the bundle available to the dispatch callback
     glob_module_bundle = module_bundle.get();
