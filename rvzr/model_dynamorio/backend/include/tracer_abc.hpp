@@ -6,7 +6,6 @@
 
 #pragma once
 
-#include "util.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -61,6 +60,7 @@ struct dbg_trace_entry_t {
         } mem;
     };
 };
+#include "types/file_buffer.hpp"
 
 // =================================================================================================
 // Class Definition

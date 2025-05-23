@@ -14,7 +14,7 @@
 #include <drreg.h>
 #include <drvector.h>
 
-#include "include/util.hpp"
+#include "util.hpp"
 
 void reserve_register_checked(void *drcontext, instrlist_t *ilist, instr_t *where,
                               drvector_t *permitted, DR_PARAM_OUT reg_id_t *reg)
