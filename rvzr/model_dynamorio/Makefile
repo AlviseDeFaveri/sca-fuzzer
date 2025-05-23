@@ -6,9 +6,9 @@ model_path := $(HOME)/.local/dynamorio/model/
 
 release := 11.2.0
 
-.PHONY: all download_dr backend adapter clean-backend clean-adapter clean
+.PHONY: all download_dr backend adapter clean-backend clean-adapter clean tools
 
-all: download_dr backend adapter
+all: download_dr backend adapter tools
 
 download_dr: $(dr_path)/drrun
 	@echo "DynamoRIO is downloaded and ready to use."
@@ -34,13 +34,22 @@ adapter:
 	make -C $(current_dir)/adapter/build
 	make -C $(current_dir)/adapter/build install
 
+tools:
+	mkdir -p $(current_dir)/tools/build
+	cd $(current_dir)/tools/build && cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON $(current_dir)/tools
+	make -C $(current_dir)/tools/build
+	make -C $(current_dir)/tools/build install
+
 clean-backend:
 	rm -rf $(current_dir)/backend/build
 
 clean-adapter:
 	rm -rf $(current_dir)/adapter/build
 
-clean:  clean-backend clean-adapter
+clean-tools:
+	rm -rf $(current_dir)/tools/build
+
+clean:  clean-backend clean-adapter clean-tools
 
 # * build dr_model
 
