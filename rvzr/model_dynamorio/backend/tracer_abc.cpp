@@ -30,7 +30,8 @@ using std::string;
 // =================================================================================================
 // Constructors and Destructors
 // =================================================================================================
-TracerABC::TracerABC(const std::string &out_path, Logger &logger) : logger(logger)
+TracerABC::TracerABC(const std::string &out_path, Logger &logger, bool print)
+    : logger(logger), trace(print)
 {
     trace.open(out_path);
 }

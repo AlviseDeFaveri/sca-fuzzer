@@ -9,6 +9,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <ostream>
 
 #include "observables.hpp"
 
@@ -25,6 +26,35 @@ enum class debug_trace_entry_type_t : uint8_t {
     ENTRY_ROLLBACK = 8,
     ENTRY_ROLLBACK_STORE = 9,
 };
+
+/// @brief Pretty-printer for trace_entry_type_t
+static constexpr const char *to_string(const debug_trace_entry_type_t &type)
+{
+    switch (type) {
+    case debug_trace_entry_type_t::ENTRY_EOT:
+        return "EOT";
+    case debug_trace_entry_type_t::ENTRY_READ:
+        return "READ";
+    case debug_trace_entry_type_t::ENTRY_WRITE:
+        return "WRITE";
+    case debug_trace_entry_type_t::ENTRY_REG_DUMP_ARCH:
+        return "ARCH";
+    case debug_trace_entry_type_t::ENTRY_REG_DUMP_SPEC:
+        return "SPEC";
+    case debug_trace_entry_type_t::ENTRY_LOC:
+        return "LOC";
+    case debug_trace_entry_type_t::ENTRY_EXCEPTION:
+        return "XCPT";
+    case debug_trace_entry_type_t::ENTRY_CHECKPOINT:
+        return "CHECKPOINT";
+    case debug_trace_entry_type_t::ENTRY_ROLLBACK_STORE:
+        return "ROLLBACK_STR";
+    case debug_trace_entry_type_t::ENTRY_ROLLBACK:
+        return "ROLLBACK";
+    }
+
+    return "UNKNOWN";
+}
 
 struct debug_trace_entry_t {
     // What does this entry contain
@@ -77,6 +107,67 @@ struct debug_trace_entry_t {
         } rollback_store;
     };
 
-    /// @brief Declare a marker to identify traces of this type
+    /// @param Declare a marker to identify traces of this type
     static constexpr char marker = 'D';
+
+    /// @brief Pretty-printer for debug_trace_entry_t
+    void dump(std::ostream &out) const
+    {
+        out << "[" << to_string(type) << "] ";
+
+        switch (type) {
+        case debug_trace_entry_type_t::ENTRY_REG_DUMP_ARCH:
+        case debug_trace_entry_type_t::ENTRY_REG_DUMP_SPEC:
+            out << " pc: " << std::hex << regs.pc;
+            out << "  (rax: 0x" << std::hex << regs.xax;
+            out << " rbx: 0x" << std::hex << regs.xbx;
+            out << " rcx: 0x" << std::hex << regs.xcx;
+            out << " rdx: 0x" << std::hex << regs.xdx;
+            out << " rsi: 0x" << std::hex << regs.xsi;
+            out << " rdi: 0x" << std::hex << regs.xdi << ")";
+            break;
+
+        case debug_trace_entry_type_t::ENTRY_LOC:
+            for (char name_char : loc.module_name) {
+                if (name_char == '\0')
+                    break;
+                out << name_char;
+            }
+            out << "+0x" << std::hex << loc.offset;
+            break;
+
+        case debug_trace_entry_type_t::ENTRY_READ:
+        case debug_trace_entry_type_t::ENTRY_WRITE:
+            out << " addr: " << std::hex << mem.address;
+            out << "  val: " << std::hex << mem.value;
+            out << "  (sz: " << std::dec << mem.size << ")";
+            break;
+
+        case debug_trace_entry_type_t::ENTRY_EXCEPTION:
+            out << " sig: " << std::dec << xcpt.signal;
+            out << "  addr: " << std::hex << xcpt.address;
+            break;
+
+        case debug_trace_entry_type_t::ENTRY_EOT:
+            out << "---- END OF TRACE ----\n";
+            break;
+        case debug_trace_entry_type_t::ENTRY_CHECKPOINT:
+            out << " rollback_pc: " << std::hex << checkpoint.rollback_pc;
+            out << " (storelog_sz: " << std::dec << checkpoint.cur_store_log_size;
+            out << " window_sz: " << std::dec << checkpoint.cur_window_size << ")";
+            break;
+        case debug_trace_entry_type_t::ENTRY_ROLLBACK:
+            out << " rollback_pc: " << std::hex << rollback.rollback_pc;
+            out << " (nesting: " << std::dec << rollback.nesting << ")";
+            break;
+
+        case debug_trace_entry_type_t::ENTRY_ROLLBACK_STORE:
+            out << " addr: 0x" << std::hex << rollback_store.addr;
+            out << " val: 0x" << std::hex << rollback_store.val;
+            out << " (sz: " << std::dec << rollback_store.size << ")";
+            break;
+        }
+
+        out << "\n";
+    }
 };

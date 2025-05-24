@@ -7,6 +7,7 @@
 #pragma once
 
 #include <cstdint>
+#include <ostream>
 
 #include "observables.hpp"
 
@@ -18,6 +19,23 @@ enum class trace_entry_type_t : uint8_t {
     ENTRY_WRITE = 3,
 };
 
+/// @brief Pretty-printer for trace_entry_type_t
+static constexpr const char *to_string(const trace_entry_type_t &type)
+{
+    switch (type) {
+    case trace_entry_type_t::ENTRY_EOT:
+        return "EOT";
+    case trace_entry_type_t::ENTRY_PC:
+        return "PC";
+    case trace_entry_type_t::ENTRY_READ:
+        return "READ";
+    case trace_entry_type_t::ENTRY_WRITE:
+        return "WRITE";
+    }
+
+    return "UNKNOWN";
+}
+
 /// @brief An entry of an observed trace
 struct trace_entry_t {
     pc_t addr;     // pc for instructions; address for memory accesses
@@ -26,4 +44,12 @@ struct trace_entry_t {
 
     /// @brief Declare a marker to identify traces of this type
     static constexpr char marker = 'T';
+
+    /// @brief Pretty-printing for tracer output
+    void dump(std::ostream &out) const
+    {
+        out << "[" << to_string(type) << "]";
+        out << " addr: " << std::hex << addr;
+        out << "  (sz: " << std::dec << size << ")\n";
+    }
 };

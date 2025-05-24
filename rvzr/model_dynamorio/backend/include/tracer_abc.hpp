@@ -27,7 +27,7 @@
 class TracerABC
 {
   public:
-    TracerABC(const std::string &out_path, Logger &logger);
+    TracerABC(const std::string &out_path, Logger &logger, bool print);
     virtual ~TracerABC() = default;
     TracerABC(const TracerABC &) = delete;
     TracerABC &operator=(const TracerABC &) = delete;

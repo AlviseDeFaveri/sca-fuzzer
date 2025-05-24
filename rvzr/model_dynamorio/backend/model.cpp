@@ -23,8 +23,6 @@
 #include "cli.hpp"
 #include "dispatcher.hpp"
 #include "factory.hpp"
-#include "speculator_abc.hpp"
-#include "tracer_abc.hpp"
 
 using std::size_t;
 using std::string;
@@ -138,8 +136,6 @@ void event_instrumentation_end(void *wrapctx, void *user_data)
 /// continue with the default exception handling
 static dr_signal_action_t event_signal(void *drcontext, dr_siginfo_t *siginfo)
 {
-    // dr_printf("[INFO] Signal received: %lx\n", siginfo->sig);
-
     if (dispatcher->handle_exception(drcontext, siginfo)) {
         return DR_SIGNAL_REDIRECT;
     }

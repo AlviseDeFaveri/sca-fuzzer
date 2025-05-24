@@ -27,7 +27,7 @@ class Logger
         LOG_MAX = 4,
     };
 
-    Logger(const std::string &logs_path, log_level_t log_level);
+    Logger(const std::string &logs_path, log_level_t log_level, bool print);
     ~Logger();
     Logger(const Logger &) = delete;
     Logger(Logger &&) = delete;

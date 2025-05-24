@@ -192,9 +192,10 @@ Dispatcher::Dispatcher(cli_args_t *cli_args)
 {
     // Create service modules
     module_bundle = std::make_unique<module_bundle_t>();
-    module_bundle->logger = create_logger(cli_args->debug_output, cli_args->log_level);
-    module_bundle->tracer =
-        create_tracer(cli_args->tracer_type, cli_args->trace_output, *module_bundle->logger);
+    module_bundle->logger =
+        create_logger(cli_args->debug_output, cli_args->log_level, cli_args->print_dbg_trace);
+    module_bundle->tracer = create_tracer(cli_args->tracer_type, cli_args->trace_output,
+                                          *module_bundle->logger, cli_args->print_trace);
     module_bundle->speculator =
         create_speculator(cli_args->speculator_type, cli_args->max_nesting,
                           cli_args->max_spec_window, *module_bundle->logger);

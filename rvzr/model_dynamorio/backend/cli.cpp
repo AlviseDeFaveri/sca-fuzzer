@@ -57,6 +57,14 @@ const droption_t<string> op_debug_output(DROPTION_SCOPE_CLIENT,
                         "debug-output", "rvzr_dbg_trace.dat",
                         "Save the debug trace to a file (in binary format).",
                         "Save the debug trace to a file (in binary format).");
+const droption_t<bool>  op_print_trace(DROPTION_SCOPE_CLIENT,
+                        "print-trace", false,
+                        "Dump trace entries to STDOUT while they are being produced.",
+                        "Dump trace entries to STDOUT while they are being produced.");
+const droption_t<bool>  op_print_dbg_trace(DROPTION_SCOPE_CLIENT,
+                        "print-debug-trace", false,
+                        "Dump trace entries to STDOUT while they are being produced.",
+                        "Dump trace entries to STDOUT while they are being produced.");
 
 // Speculator Configuration
 const droption_t<string> op_speculator_name(DROPTION_SCOPE_CLIENT,
@@ -108,6 +116,8 @@ void parse_cli(int argc, const char **argv, DR_PARAM_OUT cli_args_t &parsed_args
     parsed_args.instrumented_func = op_instrumented_func.get_value();
     parsed_args.trace_output = op_bin_output.get_value();
     parsed_args.debug_output = op_debug_output.get_value();
+    parsed_args.print_trace = op_print_trace.get_value();
+    parsed_args.print_dbg_trace = op_print_dbg_trace.get_value();
     parsed_args.log_level = op_log_level.get_value();
     parsed_args.speculator_type = op_speculator_name.get_value();
     parsed_args.max_nesting = op_max_nesting.get_value();

@@ -6,9 +6,14 @@
 
 #pragma once
 
+#include "dr_api.h"
+#include "dr_tools.h"
+
 #include <array>
 #include <cstdint>
 #include <fstream>
+#include <iostream>
+#include <sstream>
 
 /// @brief A buffer backed by a file: once the buffer reaches a given threshold, it gets
 /// automatically spilled into the backing file. Entries can only be appended to the buffer.
@@ -27,8 +32,10 @@ template <typename T, unsigned BufSize> class FileBackedBuf
     std::ofstream stream;
     std::string filename;
 
+    const bool print;
+
   public:
-    FileBackedBuf() = default;
+    FileBackedBuf(bool print) : print(print) {}
     ~FileBackedBuf()
     {
         if (stream.is_open())
@@ -69,6 +76,14 @@ template <typename T, unsigned BufSize> class FileBackedBuf
     {
         buf[n_elems] = elem;
         n_elems++;
+
+        if (print) {
+            std::string entry_str;
+            std::stringstream entry_stream(entry_str);
+            elem.dump(entry_stream);
+            dr_printf("%s", entry_stream.str().c_str());
+        }
+
         if (n_elems == max_elems)
             flush();
     }

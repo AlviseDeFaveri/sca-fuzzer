@@ -21,7 +21,7 @@
 /// @return A unique pointer to the created tracer instance
 /// @throw std::invalid_argument if the tracer name is unknown
 std::unique_ptr<TracerABC> create_tracer(const std::string &tracer_type,
-                                         const std::string &out_path, Logger &logger);
+                                         const std::string &out_path, Logger &logger, bool print);
 
 /// @brief Get a list of all available tracers
 /// @return A list of all available tracers
@@ -45,4 +45,4 @@ std::vector<std::string> get_speculator_list();
 /// @brief Create the shared logger to log debug events
 /// @param out_path Where the logger should log
 /// @param level Verbosity level of the logger
-std::unique_ptr<Logger> create_logger(const std::string &out_path, int level);
+std::unique_ptr<Logger> create_logger(const std::string &out_path, int level, bool print);

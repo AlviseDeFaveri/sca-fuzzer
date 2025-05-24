@@ -48,7 +48,8 @@ static std::pair<std::string, size_t> get_module(uint64_t pc)
 // Constructors and Destructors
 // =================================================================================================
 
-Logger::Logger(const std::string &logs_path, log_level_t log_level) : log_level(log_level)
+Logger::Logger(const std::string &logs_path, log_level_t log_level, bool print)
+    : log_level(log_level), log(print)
 {
     if (is_enabled())
         log.open(logs_path);

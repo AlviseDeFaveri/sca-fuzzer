@@ -28,17 +28,17 @@ using std::vector;
 namespace
 {
 
-const std::unordered_map<string, function<unique_ptr<TracerABC>(const string &, Logger &)>>
+const std::unordered_map<string, function<unique_ptr<TracerABC>(const string &, Logger &, bool)>>
     tracer_factories = {{
                             "ct",
-                            [](const string &out_path, Logger &logger) {
-                                return std::make_unique<TracerCT>(out_path, logger);
+                            [](const string &out_path, Logger &logger, bool print) {
+                                return std::make_unique<TracerCT>(out_path, logger, print);
                             },
                         },
                         {
                             "pc",
-                            [](const string &out_path, Logger &logger) {
-                                return std::make_unique<TracerPC>(out_path, logger);
+                            [](const string &out_path, Logger &logger, bool print) {
+                                return std::make_unique<TracerPC>(out_path, logger, print);
                             },
                         }};
 
@@ -60,10 +60,10 @@ const std::unordered_map<string, function<unique_ptr<SpeculatorABC>(int, int, Lo
 } // namespace
 
 unique_ptr<TracerABC> create_tracer(const string &tracer_type, const string &out_path,
-                                    Logger &logger)
+                                    Logger &logger, bool print)
 {
     try {
-        return tracer_factories.at(tracer_type)(out_path, logger);
+        return tracer_factories.at(tracer_type)(out_path, logger, print);
     } catch (const std::out_of_range &e) {
         throw std::invalid_argument("Unexpected tracer type: " + tracer_type);
     }
@@ -99,7 +99,7 @@ vector<string> get_speculator_list()
     return speculator_list;
 }
 
-unique_ptr<Logger> create_logger(const string &out_path, int level)
+unique_ptr<Logger> create_logger(const string &out_path, int level, bool print)
 {
     // Sanitize log level
     if (level >= Logger::log_level_t::LOG_MAX) {
@@ -108,5 +108,5 @@ unique_ptr<Logger> create_logger(const string &out_path, int level)
         level = 0;
     }
 
-    return std::make_unique<Logger>(out_path, (Logger::log_level_t)level);
+    return std::make_unique<Logger>(out_path, (Logger::log_level_t)level, print);
 }
