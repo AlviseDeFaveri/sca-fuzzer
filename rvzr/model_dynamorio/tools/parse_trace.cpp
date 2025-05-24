@@ -13,126 +13,6 @@
 #include "types/trace.hpp"
 
 // =================================================================================================
-// Pretty-printing for tracer output
-// =================================================================================================
-
-/// @brief Pretty-printer for trace_entry_type_t
-static constexpr const char *to_string(const trace_entry_type_t &type) {
-  switch (type) {
-  case trace_entry_type_t::ENTRY_EOT:
-    return "EOT";
-  case trace_entry_type_t::ENTRY_PC:
-    return "PC";
-  case trace_entry_type_t::ENTRY_READ:
-    return "READ";
-  case trace_entry_type_t::ENTRY_WRITE:
-    return "WRITE";
-  }
-
-  return "UNKNOWN";
-}
-
-/// @brief Pretty-printer for trace_entry_t
-static void dump(const trace_entry_t &entry, std::ostream &out) {
-  out << "[" << to_string(entry.type) << "]";
-  out << " addr: " << std::hex << entry.addr;
-  out << "  (sz: " << std::dec << entry.size << ")\n";
-}
-
-// =================================================================================================
-// Pretty-printing for debug logs
-// =================================================================================================
-
-/// @brief Pretty-printer for trace_entry_type_t
-static constexpr const char *to_string(const debug_trace_entry_type_t &type) {
-  switch (type) {
-  case debug_trace_entry_type_t::ENTRY_EOT:
-    return "EOT";
-  case debug_trace_entry_type_t::ENTRY_READ:
-    return "READ";
-  case debug_trace_entry_type_t::ENTRY_WRITE:
-    return "WRITE";
-  case debug_trace_entry_type_t::ENTRY_REG_DUMP_ARCH:
-    return "ARCH";
-  case debug_trace_entry_type_t::ENTRY_REG_DUMP_SPEC:
-    return "SPEC";
-  case debug_trace_entry_type_t::ENTRY_LOC:
-    return "LOC";
-  case debug_trace_entry_type_t::ENTRY_EXCEPTION:
-    return "XCPT";
-  case debug_trace_entry_type_t::ENTRY_CHECKPOINT:
-    return "CHECK";
-  case debug_trace_entry_type_t::ENTRY_ROLLBACK_STORE:
-    return "ROLLBACK";
-  case debug_trace_entry_type_t::ENTRY_ROLLBACK:
-    return "ROLLBACK";
-  }
-
-  return "UNKNOWN";
-}
-
-/// @brief Pretty-printer for debug_trace_entry_t
-static void dump(const debug_trace_entry_t &entry, std::ostream &out) {
-  out << "[" << to_string(entry.type) << "] ";
-
-  switch (entry.type) {
-  case debug_trace_entry_type_t::ENTRY_REG_DUMP_ARCH:
-  case debug_trace_entry_type_t::ENTRY_REG_DUMP_SPEC:
-    out << " pc: " << std::hex << entry.regs.pc;
-    out << "  (rax: 0x" << std::hex << entry.regs.xax;
-    out << " rbx: 0x" << std::hex << entry.regs.xbx;
-    out << " rcx: 0x" << std::hex << entry.regs.xcx;
-    out << " rdx: 0x" << std::hex << entry.regs.xdx;
-    out << " rsi: 0x" << std::hex << entry.regs.xsi;
-    out << " rdi: 0x" << std::hex << entry.regs.xdi << ")";
-    break;
-
-  case debug_trace_entry_type_t::ENTRY_LOC:
-    for (char name_char : entry.loc.module_name) {
-      if (name_char == '\0')
-        break;
-      out << name_char;
-    }
-    out << "+0x" << std::hex << entry.loc.offset;
-    break;
-
-  case debug_trace_entry_type_t::ENTRY_READ:
-  case debug_trace_entry_type_t::ENTRY_WRITE:
-    out << " addr: " << std::hex << entry.mem.address;
-    out << "  val: " << std::hex << entry.mem.value;
-    out << "  (sz: " << std::dec << entry.mem.size << ")";
-    break;
-
-  case debug_trace_entry_type_t::ENTRY_EXCEPTION:
-    out << " sig: " << std::dec << entry.xcpt.signal;
-    out << "  addr: " << std::hex << entry.xcpt.address;
-    break;
-
-  case debug_trace_entry_type_t::ENTRY_EOT:
-    out << "---- END OF TRACE ----\n";
-    break;
-  case debug_trace_entry_type_t::ENTRY_CHECKPOINT:
-    out << " rollback_pc: " << std::hex << entry.checkpoint.rollback_pc;
-    out << " (storelog_sz: " << std::dec << entry.checkpoint.cur_store_log_size;
-    out << " window_sz: " << std::dec << entry.checkpoint.cur_window_size
-        << ")";
-    break;
-  case debug_trace_entry_type_t::ENTRY_ROLLBACK:
-    out << " rollback_pc: " << std::hex << entry.rollback.rollback_pc;
-    out << " (nesting: " << std::dec << entry.rollback.nesting << ")";
-    break;
-
-  case debug_trace_entry_type_t::ENTRY_ROLLBACK_STORE:
-    out << " addr: 0x" << std::hex << entry.rollback_store.addr;
-    out << " val: 0x" << std::hex << entry.rollback_store.val;
-    out << " (sz: " << std::dec << entry.rollback_store.size << ")";
-    break;
-  }
-
-  out << "\n";
-}
-
-// =================================================================================================
 // Parsing helpers
 // =================================================================================================
 
@@ -146,7 +26,7 @@ static void parse(std::istream &in_stream, std::ostream &out_stream) {
   T entry{};
   while (not in_stream.eof()) {
     in_stream.read((char *)&entry, sizeof(T));
-    dump(entry, out_stream);
+    entry.dump(out_stream);
   }
 }
 
