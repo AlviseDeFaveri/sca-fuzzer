@@ -28,7 +28,7 @@
 
 // See Intel Manual https://cdrdv2.intel.com/v1/dl/getContent/671200
 // chapter 10.3 - Serializing Instructions.
-static constexpr const std::array<uint64_t, 18> serializing_opcodes = {
+static constexpr const std::array<uint64_t, 23> serializing_opcodes = {
     // Non-privileged memory-ordering instructions
     OP_lfence, OP_mfence, OP_sfence,
     // Privileged serializing instructions
@@ -39,7 +39,9 @@ static constexpr const std::array<uint64_t, 18> serializing_opcodes = {
     OP_cpuid, OP_iret, OP_rsm, OP_serialize,
     // NOTE: syscalls are not instrumented by Dynamorio, this makes sure that speculation is aborted
     // on speculative syscall instructions.
-    OP_syscall};
+    OP_syscall,
+    // FIXME: check these
+    OP_hlt, OP_xbegin, OP_xabort, OP_xend, OP_xtest};
 
 static bool is_speculation_barrier(const uint64_t opcode)
 {
@@ -81,6 +83,7 @@ void SpeculatorABC::checkpoint(dr_mcontext_t *mc, pc_t pc)
 
 pc_t SpeculatorABC::rollback(dr_mcontext_t *mc)
 {
+
     // restore the last checkpoint
     if (checkpoints.empty()) {
         dr_printf("[ERROR] SpeculatorABC::rollback: no checkpoints to rollback");
