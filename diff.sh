@@ -1,5 +1,4 @@
 #!/bin/bash
-set -x
 
 if [ -z "$1" ]
   then
@@ -14,15 +13,19 @@ if [ -z "$2" ]
 fi
 
 # Detect where two traces start differing architecturally.
-LOG1=a1-flush.log
-LOG2=a2-flush.log
-ARCH1=a1-arch.log
-ARCH2=a2-arch.log
-DIFF=a12-arch-diff.log
+LOG1=dbg1.asm
+LOG2=dbg2.asm
+ARCH1=dbg1-arch.asm
+ARCH2=dbg2-arch.asm
+DIFF=diff.asm
+
+set -x
 
 # Create logs
-setarch -R /home/alvise/.local/dynamorio//DynamoRIO-Linux-11.2.0/bin64/drrun -debug -c ~/.local/dynamorio/libdr_model.so --speculator "cond" --max-spec-window $1 -- ls /dev/null > $LOG1 2>&1
-setarch -R /home/alvise/.local/dynamorio//DynamoRIO-Linux-11.2.0/bin64/drrun -debug -c ~/.local/dynamorio/libdr_model.so --speculator "cond" --max-spec-window $2 -- ls /dev/null > $LOG2 2>&1
+setarch -R /home/alvise/.local/dynamorio/drrun -c ~/.local/dynamorio/libdr_model.so --enable-debug-trace --print-debug-trace --speculator "cond" --max-spec-window $1 -- ls /dev/null 2> $LOG1
+setarch -R /home/alvise/.local/dynamorio/drrun -c ~/.local/dynamorio/libdr_model.so --enable-debug-trace --print-debug-trace --speculator "cond" --max-spec-window $2 -- ls /dev/null 2> $LOG2
+
+set +x
 
 # Get the first N lines
 #head -n 12000 a1-flush.log > a1-flush-head.log
@@ -37,6 +40,15 @@ timeout 10s python3 ../scripts/tracecmp3 $ARCH1 $ARCH2 > $DIFF
 grep -m 1 -C 10 "\[93m" $DIFF
 first_diff=`grep -m 1 '\[93m' $DIFF | cut -d "]" -f 1 | cut -d "[" -f 3`
 last_eq=$((first_diff - 1))
+
+
+if [ -z "$first_diff" ]
+  then
+    echo "No diff!"
+    exit 0
+  else
+    echo "Found an architectural diff starting from instruction $first_diff"
+fi
 
 # Find corresponding line in each of the logs
 L1=$(cat $LOG1 | awk -v line="$last_eq" '/ARCH/{n++; if (n==line)f=1;} f{print NR;f--;}')
