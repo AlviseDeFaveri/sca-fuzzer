@@ -40,8 +40,10 @@ static constexpr const std::array<uint64_t, 23> serializing_opcodes = {
     // NOTE: syscalls are not instrumented by Dynamorio, this makes sure that speculation is aborted
     // on speculative syscall instructions.
     OP_syscall,
-    // FIXME: check these
-    OP_hlt, OP_xbegin, OP_xabort, OP_xend, OP_xtest};
+    // TSX/RTM instructions (not tracked by DynamoRIO).
+    OP_xbegin, OP_xabort, OP_xend, OP_xtest,
+    // Other special instructions
+    OP_hlt};
 
 static bool is_speculation_barrier(const uint64_t opcode)
 {
