@@ -114,13 +114,20 @@ pc_t SpeculatorABC::rollback(dr_mcontext_t *mc)
         logger.log_rollback_store(cur_store.addr, cur_store.val, w_size, cur_store.nesting_level);
 
         if (not success and not(store_log.size() > last_committed)) {
-            dr_printf("[WARNING] Failed rolling back store -- addr: %lx  val: %lx  sx: %d\n",
-                      cur_store.addr, cur_store.val, cur_store.size);
 
             uint prot = -1;
             dr_query_memory((byte *)cur_store.addr, nullptr, nullptr, &prot);
-            dr_printf("[WARNING] Page Flags %d\n", prot);
+            dr_memory_protect((byte *)cur_store.addr, cur_store.size,
+                              DR_MEMPROT_READ | DR_MEMPROT_WRITE | DR_MEMPROT_EXEC);
+            success =
+                dr_safe_write((byte *)cur_store.addr, cur_store.size, &cur_store.val, &w_size);
+            dr_memory_protect((byte *)cur_store.addr, cur_store.size, prot);
 
+            if (not success) {
+                dr_printf("[WARNING] Failed rolling back store -- addr: %lx  val: %lx  sx: %d\n",
+                          cur_store.addr, cur_store.val, cur_store.size);
+                dr_printf("[WARNING] Page Flags %d\n", prot);
+            }
             // dr_abort();
         }
         store_log.pop_back();
