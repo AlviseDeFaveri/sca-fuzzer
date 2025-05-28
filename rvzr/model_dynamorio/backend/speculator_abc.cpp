@@ -19,6 +19,8 @@
 #include <dr_ir_opcodes_x86.h>
 #include <dr_tools.h>
 
+#include "dr_ir_opnd.h"
+#include "dr_os_utils.h"
 #include "observables.hpp"
 #include "speculator_abc.hpp"
 
@@ -28,7 +30,7 @@
 
 // See Intel Manual https://cdrdv2.intel.com/v1/dl/getContent/671200
 // chapter 10.3 - Serializing Instructions.
-static constexpr const std::array<uint64_t, 23> serializing_opcodes = {
+static constexpr const std::array<uint64_t, 35> serializing_opcodes = {
     // Non-privileged memory-ordering instructions
     OP_lfence, OP_mfence, OP_sfence,
     // Privileged serializing instructions
@@ -42,6 +44,12 @@ static constexpr const std::array<uint64_t, 23> serializing_opcodes = {
     OP_syscall,
     // TSX/RTM instructions (not tracked by DynamoRIO).
     OP_xbegin, OP_xabort, OP_xend, OP_xtest,
+    // XSAVE no buono
+    OP_xsave32, OP_xsave64, OP_xsavec32, OP_xsavec64, OP_xsaves32, OP_xsaves64, OP_xsaveopt32,
+    OP_xsaveopt64,
+
+    OP_xrstor32, OP_xrstor64, OP_xrstors32, OP_xrstors64,
+
     // Other special instructions
     OP_hlt};
 
