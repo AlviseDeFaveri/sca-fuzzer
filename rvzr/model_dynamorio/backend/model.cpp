@@ -38,9 +38,22 @@ std::unique_ptr<Dispatcher> dispatcher = nullptr; // NOLINT
 /// @brief Name of the function to instrument
 std::string instrumented_func_name; // NOLINT
 
-void event_instrumentation_start(void *wrapctx, DR_PARAM_OUT void **user_data);
-void event_instrumentation_end(void *wrapctx, void *user_data);
-void dr_model_del() noexcept;
+static void event_instrumentation_start(void *wrapctx, DR_PARAM_OUT void **user_data);
+static void event_instrumentation_end(void *wrapctx, void *user_data);
+static void dr_model_del() noexcept;
+
+/// @brief Flush dynamorio's basic-block cache. This is needed when transitioning from
+/// non-instrumented code to instrumented code, as any shared code (e.g. libc) might be cached and
+/// therefore inaccessible for instrumentation.
+static void flush_bb_cache()
+{
+    const uint64_t flush_begin = 0;
+    const size_t flush_size = -1;
+
+    // NOTE: This is very conservative, but avoids any potentially expensive analysis of
+    // the target function
+    dr_delay_flush_region((byte *)flush_begin, flush_size, /*flush_id*/ 0, /*callback*/ nullptr);
+}
 
 // =================================================================================================
 // Event callbacks
@@ -53,7 +66,7 @@ void dr_model_del() noexcept;
 /// @param module_ Pointer to the module data
 /// @param unused
 /// @return void
-void event_module_load(void * /*drcontext*/, const module_data_t *module_, bool /*loaded*/)
+static void event_module_load(void * /*drcontext*/, const module_data_t *module_, bool /*loaded*/)
 {
     size_t offset = 0;
     const drsym_error_t sym_res = drsym_lookup_symbol(
@@ -74,8 +87,8 @@ void event_module_load(void * /*drcontext*/, const module_data_t *module_, bool 
 /// @param unused
 /// @param unused
 /// @return BB emitted state (dr_emit_flags_t)
-dr_emit_flags_t event_bb_app2app(void *drcontext, void * /*tag*/, instrlist_t *bb,
-                                 bool /*for_trace*/, bool /*translating*/)
+static dr_emit_flags_t event_bb_app2app(void *drcontext, void * /*tag*/, instrlist_t *bb,
+                                        bool /*for_trace*/, bool /*translating*/)
 {
     bool err = false;
     err |= !drutil_expand_rep_string(drcontext, bb);
@@ -98,9 +111,9 @@ dr_emit_flags_t event_bb_app2app(void *drcontext, void * /*tag*/, instrlist_t *b
 /// @param unused
 /// @param unused
 /// @return BB emitted state (dr_emit_flags_t)
-dr_emit_flags_t event_bb_instrumentation(void *drcontext, void * /*tag*/, instrlist_t *bb,
-                                         instr_t *instr, bool /*for_trace*/, bool /*translating*/,
-                                         void * /*user_data*/)
+static dr_emit_flags_t event_bb_instrumentation(void *drcontext, void * /*tag*/, instrlist_t *bb,
+                                                instr_t *instr, bool /*for_trace*/,
+                                                bool /*translating*/, void * /*user_data*/)
 {
     const dr_emit_flags_t emit_flags = dispatcher->instrument_instruction(drcontext, bb, instr);
     return emit_flags;
@@ -110,10 +123,9 @@ dr_emit_flags_t event_bb_instrumentation(void *drcontext, void * /*tag*/, instrl
 /// @param wrapctx The wrap context
 /// @param user_data
 /// @return void
-void event_instrumentation_start(void *wrapctx, DR_PARAM_OUT void **user_data)
+static void event_instrumentation_start(void *wrapctx, DR_PARAM_OUT void **user_data)
 {
-    // FIXME: Restrict the flushing to only useful stuff.
-    dr_delay_flush_region((byte *)0, (size_t)-1, 0, nullptr);
+    flush_bb_cache();
     dispatcher->start(wrapctx, user_data);
 }
 
@@ -121,11 +133,10 @@ void event_instrumentation_start(void *wrapctx, DR_PARAM_OUT void **user_data)
 /// @param wrapctx The wrap context
 /// @param user_data
 /// @return void
-void event_instrumentation_end(void *wrapctx, void *user_data)
+static void event_instrumentation_end(void *wrapctx, void *user_data)
 {
     dispatcher->finalize(wrapctx, user_data);
-    // FIXME: Restrict the flushing to only useful stuff.
-    dr_delay_flush_region((byte *)0, (size_t)-1, 0, nullptr);
+    flush_bb_cache();
 }
 
 /// @brief Callback executed upon exceptions
@@ -146,7 +157,7 @@ static dr_signal_action_t event_signal(void *drcontext, dr_siginfo_t *siginfo)
 
 /// @brief Callback executed before exiting the application.
 /// @return void
-void event_exit()
+static void event_exit()
 {
     // There is a possibility that the tracing process has not been finalized
     // because the traced function has not been called
@@ -170,7 +181,7 @@ void event_exit()
 ///        The function initializes the DR extensions and registers callbacks.
 /// @return void
 /// @throw std::runtime_error if any of the DR extensions fails to start
-void dr_model_init()
+static void dr_model_init()
 {
     // Start DR extensions
     if (!drmgr_init())
