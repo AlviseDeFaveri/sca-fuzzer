@@ -5,6 +5,8 @@
 // SPDX-License-Identifier: MIT
 
 #include <cassert>
+#include <cstdint>
+#include <cstring>
 #include <sstream>
 #include <string>
 
@@ -103,17 +105,32 @@ void Logger::log_instruction(instr_obs_t instr, dr_mcontext_t *mc, bool in_specu
 void Logger::log_mem_access(bool is_write, void *address, uint64_t size)
 {
     if (is_enabled()) {
-        uint64_t val = 0;
-        size_t w_size = 0;
-        bool success = dr_safe_read(address, sizeof(uint64_t), &val, &w_size);
+        auto cur_address = (uint64_t)address;
+        uint64_t remaining_size = size;
 
-        log.push_back({.type = is_write ? debug_trace_entry_type_t::ENTRY_WRITE
-                                        : debug_trace_entry_type_t::ENTRY_READ,
-                       .mem{
-                           .address = (uint64_t)address,
-                           .value = val,
-                           .size = size,
-                       }});
+        // Vector instructions can read/write more that 64-bits: translate these cases into multiple
+        // 64-bit entries.
+        while (remaining_size > 0) {
+            uint64_t cur_size = std::min(remaining_size, sizeof(uint64_t));
+
+            // Magic value that marks failed reads in the log.
+            const uint64_t marker = 0xDEADBEEFDEADBEEF;
+            // Read current memory value.
+            uint64_t val = marker;
+            size_t r_size = marker;
+            bool success = dr_safe_read((byte *)cur_address, cur_size, &val, &r_size);
+
+            log.push_back({.type = is_write ? debug_trace_entry_type_t::ENTRY_WRITE
+                                            : debug_trace_entry_type_t::ENTRY_READ,
+                           .mem{
+                               .address = cur_address,
+                               .value = val,
+                               .size = size,
+                           }});
+
+            cur_address += cur_size;
+            remaining_size -= cur_size;
+        }
     }
 }
 
@@ -153,7 +170,7 @@ void Logger::log_rollback(unsigned nesting, pc_t rollback_pc)
                    }});
 }
 
-void Logger::log_rollback_store(uint64_t addr, uint64_t val, size_t size)
+void Logger::log_rollback_store(uint64_t addr, uint64_t val, size_t size, uint64_t nesting_level)
 {
     if (log_level < LOG_SPEC)
         return;
@@ -163,5 +180,6 @@ void Logger::log_rollback_store(uint64_t addr, uint64_t val, size_t size)
                        .addr = addr,
                        .val = val,
                        .size = size,
+                       .nesting_level = nesting_level,
                    }});
 }

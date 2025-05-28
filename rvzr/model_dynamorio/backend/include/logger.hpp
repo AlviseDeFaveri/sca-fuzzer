@@ -20,10 +20,10 @@ class Logger
   public:
     /// @brief Verbosity level of the logger
     enum log_level_t : uint8_t {
-        LOG_NONE = 0,   // Disabled
-        LOG_BASE = 1,   // Report PC, registers, memory operations and exceptions
-        LOG_SPEC = 2,   // Also report rollbacks and checkpoints
-        LOG_DISASM = 3, // Also disassemble each instruction and report module+offset of the PC
+        LOG_NONE = 0,         // Disabled
+        LOG_INSTRUCTIONS = 1, // Report PC, registers, memory operations and exceptions
+        LOG_SPEC = 2,         // Also report rollbacks and checkpoints
+        LOG_DISASM = 3,       // Also report module_name+offset of each instruction
         LOG_MAX = 4,
     };
 
@@ -42,7 +42,7 @@ class Logger
 
     void log_checkpoint(pc_t rollback_pc, uint64_t cur_window_size, size_t cur_store_log_size);
     void log_rollback(unsigned nesting, pc_t rollback_pc);
-    void log_rollback_store(uint64_t addr, uint64_t val, size_t size);
+    void log_rollback_store(uint64_t addr, uint64_t val, size_t size, uint64_t nesting_level);
 
   private:
     static constexpr const unsigned buf_sz = 8 * 1024;

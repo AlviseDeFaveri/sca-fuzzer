@@ -104,6 +104,7 @@ struct debug_trace_entry_t {
             uint64_t addr;
             uint64_t val;
             size_t size;
+            uint64_t nesting_level;
         } rollback_store;
     };
 
@@ -164,7 +165,8 @@ struct debug_trace_entry_t {
         case debug_trace_entry_type_t::ENTRY_ROLLBACK_STORE:
             out << " addr: 0x" << std::hex << rollback_store.addr;
             out << " val: 0x" << std::hex << rollback_store.val;
-            out << " (sz: " << std::dec << rollback_store.size << ")";
+            out << " (sz: " << std::dec << rollback_store.size;
+            out << " nesting: " << std::dec << rollback_store.nesting_level << ")";
             break;
         }
 

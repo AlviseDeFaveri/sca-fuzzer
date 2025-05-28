@@ -25,12 +25,12 @@ typedef struct {
     pc_t rollback_pc;
     uint64_t spec_window;
     dr_mcontext_t mc;
-    size_t store_log_size;
 } checkpoint_t;
 
 typedef struct {
     uint64_t addr;
     uint64_t val;
+    size_t size;
     unsigned int nesting_level;
 } store_log_entry_t;
 

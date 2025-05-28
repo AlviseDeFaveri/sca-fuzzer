@@ -72,10 +72,7 @@ bool SpeculatorABC::skip_speculation() const
 void SpeculatorABC::checkpoint(dr_mcontext_t *mc, pc_t pc)
 {
     // store the register state and the rollback address
-    checkpoints.push_back({.rollback_pc = pc,
-                           .spec_window = spec_window,
-                           .mc = *mc,
-                           .store_log_size = store_log.size()});
+    checkpoints.push_back({.rollback_pc = pc, .spec_window = spec_window, .mc = *mc});
     logger.log_checkpoint(pc, spec_window, store_log.size());
 
     // update the state machine that tracks the speculation proces
@@ -97,18 +94,23 @@ pc_t SpeculatorABC::rollback(dr_mcontext_t *mc)
     spec_window = checkpoint.spec_window;
 
     // undo all store operations performed during speculation
-    while (store_log.size() > checkpoint.store_log_size) {
+    while (store_log.size() > 0) {
         const auto cur_store = store_log.back();
-        store_log.pop_back();
 
         if (cur_store.nesting_level < nesting)
             break;
 
+        store_log.pop_back();
         size_t w_size = 0;
-        // FIXME: maybe we can avoid this.
         bool success =
-            dr_safe_write((byte *)cur_store.addr, sizeof(uint64_t), &cur_store.val, &w_size);
-        logger.log_rollback_store(cur_store.addr, cur_store.val, w_size);
+            dr_safe_write((byte *)cur_store.addr, cur_store.size, &cur_store.val, &w_size);
+        logger.log_rollback_store(cur_store.addr, cur_store.val, w_size, cur_store.nesting_level);
+
+        if (not success) {
+            dr_printf("[ERROR] Failed rolling back store -- addr: %lx  val: %lx  sx: %d\n",
+                      cur_store.addr, cur_store.val, cur_store.size);
+            dr_abort();
+        }
     }
 
     // update the state machine that tracks the speculation process
@@ -154,31 +156,34 @@ void SpeculatorABC::handle_mem_access(bool is_write, void *address, uint64_t siz
 
     // record changes made to the memory
     if (is_write) {
-        size_t qword_size = size / sizeof(uint64_t);
-        if (size % sizeof(uint64_t) != 0)
-            qword_size += 1;
+        auto cur_address = (uint64_t)address;
+        size_t remaining_size = size;
 
-        size_t r_size = 0;
-        uint64_t val_ptr[8];
-        bool success = dr_safe_read(address, qword_size * 8, (byte *)val_ptr, &r_size);
-        if (not success)
-            // SEGFAULT will be handled by the exception event.
-            return;
+        // The store might be bigger than 64 bits (e.g. vector ops): save 64 bits at a time
+        while (remaining_size > 0) {
+            uint64_t cur_size = std::min(remaining_size, sizeof(uint64_t));
+            // NOTE: on speculative paths, safe reads are the only way to load from memory, since
+            // pointers might be invalid.
+            size_t r_size = 0;
+            uint64_t val = 0;
+            bool success = dr_safe_read((byte *)cur_address, cur_size, (byte *)&val, &r_size);
 
-        uint8_t cur_idx = 0;
-        while (cur_idx < qword_size) {
-            // Read 64 bits at a time.
-            // NOTE: on speculative paths, safe reads are the only way to load
-            // from memory, since pointers might be invalid.
+            if (not success)
+                // If the memory access is illegal, the store is bound to fail: let the exception
+                // handler deal with that.
+                return;
+
+            // Save the previous memory value to be restored after speculation
             store_log.push_back({
-                .addr = (uint64_t)address + (cur_idx * 8),
-                .val = val_ptr[cur_idx],
+                .addr = cur_address,
+                .val = val,
+                .size = cur_size,
                 .nesting_level = nesting,
             });
 
-            // Some writes can be greater than 8 bytes (e.g. vector registers spilling)
-            // Insert multiple 64-bit entries in these cases
-            cur_idx += 1;
+            // Advance until all relevant memory has been saved
+            cur_address += cur_size;
+            remaining_size -= cur_size;
         }
     }
 }
