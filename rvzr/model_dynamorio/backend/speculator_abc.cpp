@@ -108,16 +108,21 @@ pc_t SpeculatorABC::rollback(dr_mcontext_t *mc)
         if (cur_store.nesting_level < nesting)
             break;
 
-        store_log.pop_back();
         size_t w_size = 0;
         bool success =
             dr_safe_write((byte *)cur_store.addr, cur_store.size, &cur_store.val, &w_size);
         logger.log_rollback_store(cur_store.addr, cur_store.val, w_size, cur_store.nesting_level);
 
+        store_log.pop_back();
         if (not success) {
-            dr_printf("[ERROR] Failed rolling back store -- addr: %lx  val: %lx  sx: %d\n",
+            dr_printf("[WARNING] Failed rolling back store -- addr: %lx  val: %lx  sx: %d\n",
                       cur_store.addr, cur_store.val, cur_store.size);
-            dr_abort();
+
+            uint prot = -1;
+            dr_query_memory((byte *)cur_store.addr, nullptr, nullptr, &prot);
+            dr_printf("[WARNING] Page Flags %d\n", prot);
+
+            // dr_abort();
         }
     }
 
@@ -176,10 +181,11 @@ void SpeculatorABC::handle_mem_access(bool is_write, void *address, uint64_t siz
             uint64_t val = 0;
             bool success = dr_safe_read((byte *)cur_address, cur_size, (byte *)&val, &r_size);
 
-            if (not success)
+            if (not success) {
                 // If the memory access is illegal, the store is bound to fail: let the exception
                 // handler deal with that.
                 return;
+            }
 
             // Save the previous memory value to be restored after speculation
             store_log.push_back({
