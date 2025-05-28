@@ -132,6 +132,8 @@ class SpeculatorABC
     /// @param Used to log checkpoint and rollback events
     Logger &logger;
 
+    uint64_t last_committed = 0;
+
     // ---------------------------------------------------------------------------------------------
     // Protected Methods
 

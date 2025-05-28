@@ -113,8 +113,7 @@ pc_t SpeculatorABC::rollback(dr_mcontext_t *mc)
             dr_safe_write((byte *)cur_store.addr, cur_store.size, &cur_store.val, &w_size);
         logger.log_rollback_store(cur_store.addr, cur_store.val, w_size, cur_store.nesting_level);
 
-        store_log.pop_back();
-        if (not success) {
+        if (not success and not(store_log.size() > last_committed)) {
             dr_printf("[WARNING] Failed rolling back store -- addr: %lx  val: %lx  sx: %d\n",
                       cur_store.addr, cur_store.val, cur_store.size);
 
@@ -124,7 +123,10 @@ pc_t SpeculatorABC::rollback(dr_mcontext_t *mc)
 
             // dr_abort();
         }
+        store_log.pop_back();
     }
+
+    last_committed = store_log.size();
 
     // update the state machine that tracks the speculation process
     nesting -= 1;
@@ -145,6 +147,8 @@ pc_t SpeculatorABC::rollback(dr_mcontext_t *mc)
 
 pc_t SpeculatorABC::handle_instruction(instr_obs_t instr, dr_mcontext_t *mc, void * /*dc*/)
 {
+    last_committed = store_log.size();
+
     if (not in_speculation)
         return 0;
 
