@@ -43,28 +43,28 @@ const droption_t<string> op_instrumented_func(DROPTION_SCOPE_CLIENT,
                         "instrumented-func", "__libc_start_main",
                         "Name of the function to instrument.",
                         "Name of the function to instrument.");
-const droption_t<string> op_bin_output(DROPTION_SCOPE_CLIENT,
-                        "bin-output", "rvzr_trace.dat",
-                        "Save the trace to a file (in binary format).",
-                        "Save the trace to a file (in binary format).");
-
-// Debugging
-const droption_t<int>   op_log_level(DROPTION_SCOPE_CLIENT,
-                        "log-level", 0,
-                        "Verbosity level of the debug logger (0 = disabled).",
-                        "Collect a more verbose trace.");
-const droption_t<string> op_debug_output(DROPTION_SCOPE_CLIENT,
-                        "debug-output", "rvzr_dbg_trace.dat",
-                        "Save the debug trace to a file (in binary format).",
-                        "Save the debug trace to a file (in binary format).");
+const droption_t<string> op_trace_output(DROPTION_SCOPE_CLIENT,
+                        "trace-output", "rvzr_trace.dat",
+                        "Where to save the trace (in binary format).",
+                        "Where to save the trace (in binary format).");
 const droption_t<bool>  op_print_trace(DROPTION_SCOPE_CLIENT,
                         "print-trace", false,
                         "Dump trace entries to STDOUT while they are being produced.",
                         "Dump trace entries to STDOUT while they are being produced.");
-const droption_t<bool>  op_print_dbg_trace(DROPTION_SCOPE_CLIENT,
+
+// Debugging
+const droption_t<int>    op_log_level(DROPTION_SCOPE_CLIENT,
+                        "log-level", 0,
+                        "Verbosity level of the debug logger (0 = disabled).",
+                        "Verbosity level of the debug logger (0 = disabled).");
+const droption_t<string> op_debug_output(DROPTION_SCOPE_CLIENT,
+                        "debug-output", "rvzr_dbg_trace.dat",
+                        "Save the debug log to a file (in binary format).",
+                        "Save the debug log to a file (in binary format).");
+const droption_t<bool>   op_print_dbg_trace(DROPTION_SCOPE_CLIENT,
                         "print-debug-trace", false,
-                        "Dump trace entries to STDOUT while they are being produced.",
-                        "Dump trace entries to STDOUT while they are being produced.");
+                        "Dump log entries to STDOUT while they are being produced.",
+                        "Dump log entries to STDOUT while they are being produced.");
 
 // Speculator Configuration
 const droption_t<string> op_speculator_name(DROPTION_SCOPE_CLIENT,
@@ -114,7 +114,7 @@ void parse_cli(int argc, const char **argv, DR_PARAM_OUT cli_args_t &parsed_args
     // Set the parsed arguments
     parsed_args.tracer_type = op_tracer_name.get_value();
     parsed_args.instrumented_func = op_instrumented_func.get_value();
-    parsed_args.trace_output = op_bin_output.get_value();
+    parsed_args.trace_output = op_trace_output.get_value();
     parsed_args.debug_output = op_debug_output.get_value();
     parsed_args.print_trace = op_print_trace.get_value();
     parsed_args.print_dbg_trace = op_print_dbg_trace.get_value();
