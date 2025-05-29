@@ -24,6 +24,7 @@
 
 #include "observables.hpp"
 #include "tracer_abc.hpp"
+#include "types/trace.hpp"
 
 using std::string;
 
@@ -51,6 +52,9 @@ void TracerABC::tracing_finalize(void * /*wrapctx*/, DR_PARAM_OUT void * /*user_
         return;
     }
 
+    // Push the end-of-trace marker.
+    trace.push_back({.addr = 0, .size = 0, .type = trace_entry_type_t::ENTRY_EOT});
+
     // Flush the trace buffer
     dr_printf("Done Tracing!\n");
     trace.clear();
@@ -73,4 +77,11 @@ void TracerABC::observe_mem_access(bool is_write, void *address, uint64_t size)
 {
     logger.log_mem_access(is_write, address, size);
     // The rest of the functionality - if any - is implemented by subclasses
+}
+
+void TracerABC::notify_arch_exception(dr_siginfo_t *siginfo)
+{
+    trace.push_back({.addr = (pc_t)siginfo->access_address,
+                     .size = (uint32_t)siginfo->sig,
+                     .type = trace_entry_type_t::ENTRY_EXCEPTION});
 }

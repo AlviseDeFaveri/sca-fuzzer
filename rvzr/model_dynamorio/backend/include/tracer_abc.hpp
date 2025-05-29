@@ -73,6 +73,11 @@ class TracerABC
     /// @return void
     virtual void observe_mem_access(bool is_write, void *address, uint64_t size);
 
+    /// @brief Notify the trace that there was an architectural exception. The tracer is in charge
+    ///        of making sure that the trace is not corrupted upon application exceptions.
+    /// @param siginfo Information about the exception coming from DynamoRIO.
+    void notify_arch_exception(dr_siginfo_t *siginfo);
+
   protected:
     // ---------------------------------------------------------------------------------------------
     // Protected Fields

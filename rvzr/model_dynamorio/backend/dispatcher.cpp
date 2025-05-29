@@ -127,6 +127,7 @@ bool Dispatcher::handle_exception(void * /*drcontext*/, dr_siginfo_t *siginfo)
     // Architectural exceptions are redirected to the program
     if (!module_bundle->speculator->in_speculation) {
         dr_printf("[XCPT] Dispatcher::handle_exception: exception on a non-speculative path\n");
+        module_bundle->tracer->notify_arch_exception(siginfo);
         return false;
     }
 

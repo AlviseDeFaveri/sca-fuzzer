@@ -17,6 +17,7 @@ enum class trace_entry_type_t : uint8_t {
     ENTRY_PC = 1,
     ENTRY_READ = 2,
     ENTRY_WRITE = 3,
+    ENTRY_EXCEPTION = 4,
 };
 
 /// @brief Pretty-printer for trace_entry_type_t
@@ -31,6 +32,8 @@ static constexpr const char *to_string(const trace_entry_type_t &type)
         return "READ";
     case trace_entry_type_t::ENTRY_WRITE:
         return "WRITE";
+    case trace_entry_type_t::ENTRY_EXCEPTION:
+        return "XCPT";
     }
 
     return "UNKNOWN";
@@ -49,7 +52,26 @@ struct trace_entry_t {
     void dump(std::ostream &out) const
     {
         out << "[" << to_string(type) << "]";
-        out << " addr: " << std::hex << addr;
-        out << "  (sz: " << std::dec << size << ")\n";
+
+        switch (type) {
+        case trace_entry_type_t::ENTRY_EOT:
+            out << " ===== END OF TRACE ===== ";
+            break;
+        case trace_entry_type_t::ENTRY_PC:
+            out << " pc: " << std::hex << addr;
+            out << "  (instr sz: " << std::dec << size << ")";
+            break;
+        case trace_entry_type_t::ENTRY_READ:
+        case trace_entry_type_t::ENTRY_WRITE:
+            out << " addr: " << std::hex << addr;
+            out << "  (sz: " << std::dec << size << ")";
+            break;
+        case trace_entry_type_t::ENTRY_EXCEPTION:
+            out << " faulty_addr: " << std::hex << addr;
+            out << "  (sig: " << std::dec << size << ")";
+            break;
+        }
+
+        out << "\n";
     }
 };
