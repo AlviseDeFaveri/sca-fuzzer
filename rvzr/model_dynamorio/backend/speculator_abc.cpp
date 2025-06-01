@@ -117,11 +117,6 @@ pc_t SpeculatorABC::rollback(dr_mcontext_t *mc)
 
             uint prot = -1;
             dr_query_memory((byte *)cur_store.addr, nullptr, nullptr, &prot);
-            dr_memory_protect((byte *)cur_store.addr, cur_store.size,
-                              DR_MEMPROT_READ | DR_MEMPROT_WRITE | DR_MEMPROT_EXEC);
-            success =
-                dr_safe_write((byte *)cur_store.addr, cur_store.size, &cur_store.val, &w_size);
-            dr_memory_protect((byte *)cur_store.addr, cur_store.size, prot);
 
             if (not success) {
                 dr_printf("[WARNING] Failed rolling back store -- addr: %lx  val: %lx  sx: %d\n",
