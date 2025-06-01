@@ -24,6 +24,7 @@
 #include "dr_os_utils.h"
 #include "observables.hpp"
 #include "speculator_abc.hpp"
+#include "util.hpp"
 
 // =================================================================================================
 // Local helper functions
@@ -104,27 +105,25 @@ pc_t SpeculatorABC::rollback(dr_mcontext_t *mc)
 
     // undo all store operations performed during speculation
     while (store_log.size() > 0) {
-        const auto cur_store = store_log.back();
+        const auto store = store_log.back();
 
-        if (cur_store.nesting_level < nesting)
+        if (store.nesting_level < nesting)
             break;
 
+        // Try restoring the previous value in memory.
         size_t w_size = 0;
-        bool success =
-            dr_safe_write((byte *)cur_store.addr, cur_store.size, &cur_store.val, &w_size);
-        logger.log_rollback_store(cur_store.addr, cur_store.val, w_size, cur_store.nesting_level);
+        bool success = dr_safe_write((byte *)store.addr, store.size, &store.val, &w_size);
+        logger.log_rollback_store(store.addr, store.val, w_size, store.nesting_level);
 
+        // If the store does not succeed, try forcing the right permissions.
         if (not success and not(store_log.size() > last_committed)) {
-
-            uint prot = -1;
-            dr_query_memory((byte *)cur_store.addr, nullptr, nullptr, &prot);
-
+            success = force_write((byte *)store.addr, store.size, &store.val, &w_size);
             if (not success) {
-                dr_printf("[WARNING] Failed rolling back store -- addr: %lx  val: %lx  sx: %d\n",
-                          cur_store.addr, cur_store.val, cur_store.size);
-                dr_printf("[WARNING] Page Flags %d\n", prot);
+                // If forcing permissions does not work, the rollback failed.
+                dr_printf("[WARNING] Failed to rollback store -- addr: %lx  val: %lx  sx: %d\n",
+                          store.addr, store.val, store.size);
+                dr_abort();
             }
-            // dr_abort();
         }
         store_log.pop_back();
     }
@@ -148,67 +147,7 @@ pc_t SpeculatorABC::rollback(dr_mcontext_t *mc)
     return checkpoint.rollback_pc;
 }
 
-static bool is_illegal_jump(instr_obs_t instr, dr_mcontext_t *mc, void *dc)
-{
-    // Decode the instruction
-    instr_noalloc_t noalloc;
-    instr_noalloc_init(dc, &noalloc);
-    instr_t *cur_instr = instr_from_noalloc(&noalloc);
-    byte *next_pc = decode(dc, (byte *)instr.pc, cur_instr);
-    if (next_pc == nullptr) {
-        dr_printf("[ERROR] cond_speculator: Failed to decode instruction\n");
-        dr_abort();
-        return {};
-    }
-
-    // If it's an indirect call or ret.
-    if (instr_is_call_indirect(cur_instr) || instr_is_return(cur_instr)) {
-        opnd_t target = instr_get_target(cur_instr);
-        app_pc target_addr = nullptr;
-
-        // Read the target from memory
-        if (opnd_is_memory_reference(target) or instr_is_return(cur_instr)) {
-            app_pc *addr = instr_is_return(cur_instr) ? (app_pc *)mc->xsp
-                                                      : (app_pc *)opnd_compute_address(target, mc);
-            byte buf[sizeof(void *)];
-            if (dr_safe_read(addr, sizeof(buf), buf, nullptr)) {
-                target_addr = *(app_pc *)buf;
-                // dr_printf("[INDIRECT_CALL] Found mem indirect call: reading %lx from %lx\n",
-                //   target_addr, target);
-            } else {
-                // dr_printf("[INDIRECT_CALL] Could not read target from memory\n");
-                instr_free(dc, cur_instr);
-                return false;
-            }
-            // Or directly from a register
-        } else if (opnd_is_reg(target)) {
-            target_addr = (app_pc)instr.target;
-            // dr_printf("[INDIRECT_CALL] Found reg indirect call: reading %lx from %lx\n",
-            //   target_addr, instr.target);
-
-        } else {
-            // dr_printf("[INDIRECT_CALL] Unhandled target type\n");
-            instr_free(dc, cur_instr);
-            return false;
-        }
-
-        // Check if the target is executable
-        uint prot = -1;
-        dr_query_memory(target_addr, nullptr, nullptr, &prot);
-        // dr_printf("[INDIRECT_CALL] target_addr: %lx, prot: %lx\n", target_addr, prot);
-
-        if ((prot & DR_MEMPROT_EXEC) == 0) {
-            // dr_printf("INVALID TARGET!\n");
-            instr_free(dc, cur_instr);
-            return true;
-        }
-    }
-
-    instr_free(dc, cur_instr);
-    return false;
-}
-
-pc_t SpeculatorABC::handle_instruction(instr_obs_t instr, dr_mcontext_t *mc, void *dc)
+pc_t SpeculatorABC::handle_instruction(instr_obs_t instr, dr_mcontext_t *mc, void * /*dc*/)
 {
     last_committed = store_log.size();
 
@@ -223,10 +162,6 @@ pc_t SpeculatorABC::handle_instruction(instr_obs_t instr, dr_mcontext_t *mc, voi
     // rollback if we hit a speculation window limit
     spec_window += 1;
     if (spec_window >= max_spec_window) {
-        return rollback(mc);
-    }
-
-    if (is_illegal_jump(instr, mc, dc)) {
         return rollback(mc);
     }
 

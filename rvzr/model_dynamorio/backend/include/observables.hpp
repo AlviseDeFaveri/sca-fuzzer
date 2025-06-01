@@ -16,7 +16,6 @@ typedef struct {
     uint64_t opcode;
     uint64_t pc;
     bool has_mem_access;
-    uint64_t target;
 } instr_obs_t;
 
 /// @brief Structure describing observable information of a memory access
