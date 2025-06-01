@@ -19,6 +19,7 @@
 #include <dr_ir_opcodes_x86.h>
 #include <dr_tools.h>
 
+#include "dr_ir_instr.h"
 #include "dr_ir_opnd.h"
 #include "dr_os_utils.h"
 #include "observables.hpp"
@@ -147,7 +148,67 @@ pc_t SpeculatorABC::rollback(dr_mcontext_t *mc)
     return checkpoint.rollback_pc;
 }
 
-pc_t SpeculatorABC::handle_instruction(instr_obs_t instr, dr_mcontext_t *mc, void * /*dc*/)
+static bool is_illegal_jump(instr_obs_t instr, dr_mcontext_t *mc, void *dc)
+{
+    // Decode the instruction
+    instr_noalloc_t noalloc;
+    instr_noalloc_init(dc, &noalloc);
+    instr_t *cur_instr = instr_from_noalloc(&noalloc);
+    byte *next_pc = decode(dc, (byte *)instr.pc, cur_instr);
+    if (next_pc == nullptr) {
+        dr_printf("[ERROR] cond_speculator: Failed to decode instruction\n");
+        dr_abort();
+        return {};
+    }
+
+    // If it's an indirect call or ret.
+    if (instr_is_call_indirect(cur_instr) || instr_is_return(cur_instr)) {
+        opnd_t target = instr_get_target(cur_instr);
+        app_pc target_addr = nullptr;
+
+        // Read the target from memory
+        if (opnd_is_memory_reference(target) or instr_is_return(cur_instr)) {
+            app_pc *addr = instr_is_return(cur_instr) ? (app_pc *)mc->xsp
+                                                      : (app_pc *)opnd_compute_address(target, mc);
+            byte buf[sizeof(void *)];
+            if (dr_safe_read(addr, sizeof(buf), buf, nullptr)) {
+                target_addr = *(app_pc *)buf;
+                // dr_printf("[INDIRECT_CALL] Found mem indirect call: reading %lx from %lx\n",
+                //   target_addr, target);
+            } else {
+                // dr_printf("[INDIRECT_CALL] Could not read target from memory\n");
+                instr_free(dc, cur_instr);
+                return false;
+            }
+            // Or directly from a register
+        } else if (opnd_is_reg(target)) {
+            target_addr = (app_pc)instr.target;
+            // dr_printf("[INDIRECT_CALL] Found reg indirect call: reading %lx from %lx\n",
+            //   target_addr, instr.target);
+
+        } else {
+            // dr_printf("[INDIRECT_CALL] Unhandled target type\n");
+            instr_free(dc, cur_instr);
+            return false;
+        }
+
+        // Check if the target is executable
+        uint prot = -1;
+        dr_query_memory(target_addr, nullptr, nullptr, &prot);
+        // dr_printf("[INDIRECT_CALL] target_addr: %lx, prot: %lx\n", target_addr, prot);
+
+        if ((prot & DR_MEMPROT_EXEC) == 0) {
+            // dr_printf("INVALID TARGET!\n");
+            instr_free(dc, cur_instr);
+            return true;
+        }
+    }
+
+    instr_free(dc, cur_instr);
+    return false;
+}
+
+pc_t SpeculatorABC::handle_instruction(instr_obs_t instr, dr_mcontext_t *mc, void *dc)
 {
     last_committed = store_log.size();
 
@@ -162,6 +223,10 @@ pc_t SpeculatorABC::handle_instruction(instr_obs_t instr, dr_mcontext_t *mc, voi
     // rollback if we hit a speculation window limit
     spec_window += 1;
     if (spec_window >= max_spec_window) {
+        return rollback(mc);
+    }
+
+    if (is_illegal_jump(instr, mc, dc)) {
         return rollback(mc);
     }
 

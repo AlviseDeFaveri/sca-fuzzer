@@ -17,6 +17,7 @@
 
 #include "cli.hpp"
 #include "dispatcher.hpp"
+#include "dr_ir_opnd.h"
 #include "factory.hpp"
 #include "observables.hpp"
 
@@ -89,7 +90,8 @@ static pc_t mem_access_dispatch(void *dc, dr_mcontext_t *mc, const module_bundle
 /// @param opcode The opcode of the instruction
 /// @param pc The program counter (address) of the instruction
 /// @param has_mem_ref Flag indicating whether the instruction has a memory reference
-static void dispatch_callback(uint64_t opcode, uint64_t pc, uint64_t has_mem_ref)
+static void dispatch_callback(uint64_t opcode, uint64_t pc, uint64_t has_mem_ref, // NOLINT
+                              uint64_t op_reg)
 {
     const module_bundle_t *bundle = glob_module_bundle;
     if (bundle == nullptr) {
@@ -108,6 +110,7 @@ static void dispatch_callback(uint64_t opcode, uint64_t pc, uint64_t has_mem_ref
         .opcode = opcode,
         .pc = (pc_t)pc,
         .has_mem_access = (bool)has_mem_ref,
+        .target = op_reg,
     };
 
     // pass down to instruction dispatch functions and redirect execution if needed
@@ -191,9 +194,18 @@ dr_emit_flags_t Dispatcher::instrument_instruction(void *drcontext, instrlist_t 
     const opnd_t has_mem_ref =
         OPND_CREATE_INT64(instr_reads_memory(org_instr) or instr_writes_memory(org_instr));
 
+    reg_id_t reg = DR_REG_VIRT0;
+    if (instr_is_return(org_instr) or instr_is_call_indirect(org_instr)) {
+        opnd_t target = instr_get_target(org_instr);
+        if (opnd_is_reg(target)) {
+            reg = opnd_get_reg(target);
+            // dr_printf("[INDIRECT_CALL] Found reg indirect call: reg %lx\n", reg);
+        }
+    }
+
     // Add a clean call to the dispatch callback, which will forward the call to the service modules
-    dr_insert_clean_call(drcontext, bb, instr, (void *)dispatch_callback, false, 3, opcode, pc,
-                         has_mem_ref);
+    dr_insert_clean_call(drcontext, bb, instr, (void *)dispatch_callback, false, 4, opcode, pc,
+                         has_mem_ref, opnd_create_reg(reg));
 
     return DR_EMIT_DEFAULT;
 }
