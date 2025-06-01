@@ -173,10 +173,10 @@ pc_t SpeculatorABC::handle_instruction(instr_obs_t instr, dr_mcontext_t *mc, voi
     return 0;
 }
 
-void SpeculatorABC::handle_mem_access(bool is_write, void *address, uint64_t size)
+bool SpeculatorABC::handle_mem_access(bool is_write, void *address, uint64_t size)
 {
     if (not in_speculation)
-        return;
+        return true;
 
     // record changes made to the memory
     if (is_write) {
@@ -193,9 +193,8 @@ void SpeculatorABC::handle_mem_access(bool is_write, void *address, uint64_t siz
             bool success = dr_safe_read((byte *)cur_address, cur_size, (byte *)&val, &r_size);
 
             if (not success) {
-                // If the memory access is illegal, the store is bound to fail: let the exception
-                // handler deal with that.
-                return;
+                // If the memory access is illegal, the store is bound to fail: rollback.
+                return false;
             }
 
             // Save the previous memory value to be restored after speculation
@@ -211,4 +210,6 @@ void SpeculatorABC::handle_mem_access(bool is_write, void *address, uint64_t siz
             remaining_size -= cur_size;
         }
     }
+
+    return true;
 }

@@ -100,8 +100,8 @@ class SpeculatorABC
     /// @param type The type of the memory access (read or write)
     /// @param address The address of the memory access
     /// @param size The size of the memory access
-    /// @return void
-    virtual void handle_mem_access(bool is_write, void *address, uint64_t size);
+    /// @return false if the memory access cannot be rolled-back
+    virtual bool handle_mem_access(bool is_write, void *address, uint64_t size);
 
   protected:
     // ---------------------------------------------------------------------------------------------
