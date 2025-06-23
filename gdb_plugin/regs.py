@@ -1,22 +1,3 @@
-#  Colors
-class Color:
-   PURPLE = '\033[1;35;48m'
-   CYAN = '\033[1;36;48m'
-   BOLD = '\033[1;37;48m'
-   BLUE = '\033[1;34;48m'
-   GREEN = '\033[1;32;48m'
-   YELLOW = '\033[1;33;48m'
-   RED = '\033[1;31;48m'
-   BLACK = '\033[1;30;48m'
-   UNDERLINE = '\033[4;37;48m'
-   END = '\033[1;37;0m'
-
-def printc(color: Color, text: str) -> None:
-   print(color + str(text) + Color.END)
-
-def getc(color: Color, text: str) -> None:
-   return color + str(text) + Color.END
-
 #  DR regs
 REGS = ["NULL",
     "RAX",
@@ -269,3 +250,8 @@ OPMASKS = ["K0",
     "K5",
     "K6",
     "K7"]
+
+REVERSE_REGS = {}
+
+for idx, val in enumerate(REGS):
+    REVERSE_REGS[val] = idx
