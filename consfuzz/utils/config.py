@@ -1,8 +1,8 @@
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import os
 import yaml
 
-_glob_config: Dict[str, Any] = None
+_glob_config: "Config" = None
 
 class Config:
     declassified: List[str] = []
@@ -53,12 +53,11 @@ class Config:
         return _glob_config
 
     @staticmethod
-    def get_sym_annotation(address: str) -> tuple[Optional[str], Optional[int]]:
+    def get_sym_annotation(address: str) -> Optional[Tuple[str, int]]:
         global _glob_config
         for sym_name, sym_address in _glob_config.known_syms.items():
                 start = sym_address[0]
                 size = sym_address[1]
                 if address >= start and address < start + size:
                     return sym_name, address-start
-        return None, None
-
+        return None

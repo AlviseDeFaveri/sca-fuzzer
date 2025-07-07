@@ -7,9 +7,9 @@ import os
 
 from rvzr.model_dynamorio.trace_decoder import TraceDecoder, TraceEntryType, DebugTraceEntryType
 from inspector.use_def_tracker import UseDefTracker
-from inspector.config import Config
 from inspector import get_plugin_path
-from inspector.symbol_server import SymbolServer, CombinedSymbolServer
+from utils.config import Config
+from utils.symbol_server import SymbolServer, CombinedSymbolServer
 
 _TRACING_FLAGS = "--log-level 5 --debug-trace-output {dbg_trace_file} --print-debug-trace "
 
@@ -226,6 +226,12 @@ if __name__ == "__main__":
     print(f"\n====== Printing use-def information at {use_def_file}")
     # Setup symbol server
     symbols = SymbolServer("") if args.binary is None else CombinedSymbolServer(args.binary) # GdbSymbolServer(binary)
+    # Setup configuration
+    Config.init(args.config)
     # Print use-def chain to a file
-    tracker = UseDefTracker(use_def_file, symbols, args.config)
-    tracker.analyze(dbg_traces[0][0], dbg_traces[0][1], dbg_traces[1][0], dbg_traces[1][1], args.violation)
+    tracker = UseDefTracker(use_def_file, symbols)
+    graph = tracker.analyze(dbg_traces[0][0], dbg_traces[0][1], dbg_traces[1][0], dbg_traces[1][1], args.violation)
+    # graph.print_recursive()
+    dot_file = "out.dot"
+    print(f"\n====== Printing graph at {dot_file}")
+    graph.draw(dot_file)

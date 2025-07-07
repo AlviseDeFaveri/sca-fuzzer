@@ -11,7 +11,6 @@ import gdb
 import sys
 sys.path.append("/home/alvise/venv-revizor-2/lib/python3.12/site-packages")
 sys.path.append(".")
-sys.path.append("gdb_plugin")
 
 from typing import Any, Optional
 from rvzr.model_dynamorio.trace_decoder import TraceDecoder, DebugTraceEntryType

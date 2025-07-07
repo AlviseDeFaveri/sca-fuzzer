@@ -5,14 +5,18 @@ Copyright (C) Microsoft Corporation
 SPDX-License-Identifier: MIT
 """
 
+from typing import Dict, Final, List
+from .shared_types import *
+
+
 # Map regiter names back to registers.
-REVERSE_REGS = {}
+REVERSE_REGS: Dict[RegName, RegId] = {}
 
 # Map register id to register names, taken from the DynamoRIO headers.
-REGS = []
+REGS: List[RegName] = []
 
 # Register used for AVX instruction size
-OPMASKS = ["K0",
+OPMASKS: Final[List[RegName]] = ["K0",
     "K1",
     "K2",
     "K3",
@@ -276,7 +280,7 @@ def init_reg_map():
         REVERSE_REGS[val] = idx
 
 
-def strip_alias(reg_name: str):
+def strip_alias(reg_name: RegName):
     """
     Reduce different names that represent portions of the same register to a single name.
     """
@@ -308,7 +312,7 @@ def strip_alias(reg_name: str):
     return reg_name
 
 
-def reg_id_to_stripped_name(reg_idx: int):
+def reg_id_to_stripped_name(reg_idx: RegId):
     """
     Get the name for a reg id after stripping the alias, treating registers that alias as
     the same register.

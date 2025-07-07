@@ -1,9 +1,9 @@
 # Source code lines that are known to always output declassified data (i.e. encryption functions)
 declassified: [
     "lib/aes-xmm.c:345",
-    # "lib/gcm.c:710",
-    # "lib/gcm.c:711",
-    # "lib/ghash.c:632",
+    "lib/gcm.c:710",
+    "lib/gcm.c:711",
+    # "lib/ghash.c:632"
   ]
 # Addresses of known symbols in memory, in the form of <sym_name>: [start_address, size]
 # TODO: get these values from the driver somehow
