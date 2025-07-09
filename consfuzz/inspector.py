@@ -192,7 +192,7 @@ if __name__ == "__main__":
     line1 = int(splitted[-2])
     # Get path and line of the baseline
     input_name = os.path.basename(trace1)
-    trace2 = trace1.replace(input_name, 'private_000.trace')
+    trace2 = trace1.replace(input_name, '000.trace')
     line2 = int(splitted[-1])
 
     # Run the debug tracer and find the corresponding line for both target and baseline

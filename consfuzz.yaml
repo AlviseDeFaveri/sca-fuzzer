@@ -3,7 +3,7 @@ working_dir: "/home/alvise/sw-testing/results/latest"
 force_working_dir_overwrite: True
 model_root: "~/.local/dynamorio/"
 afl_root: "/home/alvise/sw-testing/AFLplusplus/"
-afl_seed_dir: "/home/alvise/sw-testing/drivers/drivers/bearssl/corpora/pub"
+afl_seed_dir: "/home/alvise/sw-testing/drivers/drivers/symcrypt/corpora"
 contract_observation_clause: "ct"
 contract_execution_clause: "cond"
 afl_exec_timeout_ms: 2000

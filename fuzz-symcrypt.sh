@@ -15,12 +15,13 @@ CONFIG=consfuzz.yaml
 RESULTS=$BASE_PATH/results/latest
 CMD=$BASE_PATH/rvzr-sw-eval/drivers/symcrypt/symcrypt
 INPUT=$BASE_PATH/rvzr-sw-eval/drivers/symcrypt/test/iv.bin
+POLICY_FILE=$BASE_PATH/rvzr-sw-eval/drivers/symcrypt/policy.txt
 
 set -e
 set -o pipefail
 set -x
 
-./consfuzz.py pub_gen -c $CONFIG -t $1 -- $CMD -k @# -o enc.bin @@
-./consfuzz.py stage2 -c $CONFIG -n $2 -- $CMD -k @# -o enc.bin @@
+./consfuzz.py pub_gen -c $CONFIG -t $1 -- $CMD -d @@ -o enc.bin -p $POLICY_FILE
+./consfuzz.py stage2 -c $CONFIG -n $2 -- $CMD -d @@ -o enc.bin -p $POLICY_FILE
 ./consfuzz.py report -c $CONFIG -b $CMD
 batcat $RESULTS/stage3/fuzzing_report.json
