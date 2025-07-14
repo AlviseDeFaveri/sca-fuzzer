@@ -110,6 +110,8 @@ class UseDefGraph:
         self.edges[src].append(UseDefEdge(dst, use))
 
     def trim(self, node_id: TraceLineNum) -> None:
+        if node_id not in self.nodes.keys():
+            self.nodes[node_id] = UseDefNode(node_id)
         self.nodes[node_id].trimmed = True
 
     #-----------------------------------------------------------------------------------------------

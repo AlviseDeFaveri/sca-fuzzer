@@ -56,7 +56,7 @@ class SpecWinInfo:
         if _glob_cur_line == self.first_line:
             return f"{prefix} └─ last: {hex(self.first_pc)} [line: {self.first_line}]\n"
         else:
-            s = f"{prefix}  ├─ speculated to: {hex(self.first_pc)} [line: {self.first_line}]\n"
+            s =  f"{prefix} ├─ speculated to: {hex(self.first_pc)} [line: {self.first_line}]\n"
             s += f"{prefix} └─ last: {hex(self.target_pc)} (#{self.target_count}) [line: {self.target_line}]"
             return s
 

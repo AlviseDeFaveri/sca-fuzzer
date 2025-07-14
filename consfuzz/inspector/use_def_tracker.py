@@ -265,7 +265,9 @@ class UseDefTracker:
             self.follow_def_use_chain_recursive(next_list, follow_regs=True, follow_mem=True)
             idx += 1
 
-    def analyze(self, raw_trace1: list[Any], line1: TraceLineNum, raw_trace2: list[Any], line2: TraceLineNum, violation: str) -> UseDefGraph:
+    def analyze(self, raw_trace1: list[Any], line1: TraceLineNum,
+                raw_trace2: Optional[list[Any]], line2: Optional[TraceLineNum],
+                violation: str) -> UseDefGraph:
         # Initialize trace(s)
         trace1 = TraceState(raw_trace1, line1)
         trace2 = None
@@ -273,7 +275,7 @@ class UseDefTracker:
             trace2 = TraceState(raw_trace2, line2)
 
         if violation == "D":
-            # data violation: get all MEM_USES
+            # MEM violation: get all MEM uses
             init_state = DifferentialTraceState([trace1])
             if trace2 is not None:
                 init_state.states.append(trace2)
@@ -283,14 +285,19 @@ class UseDefTracker:
             # PC violation: 1. go to previous instruction
             # NOTE: if a trace has two different PCs it means that the control-flow
             # instruction immediately preceding them had a different outcome.
-            trace1.tracer.prev_entry()
-            trace1.update_line(trace1.tracer.cur_idx)
+            trace1.prev_entry()
             init_state = DifferentialTraceState([trace1])
             if trace2 is not None:
-                trace2.tracer.prev_entry()
-                trace2.update_line(trace2.tracer.cur_idx)
+                trace2.prev_entry()
                 init_state.states.append(trace2)
             # 2. follow all reg uses of the previous instruction
+            self.follow_def_use_chain_recursive(diff_states=[init_state], follow_mem=False, follow_regs=True)
+
+        elif violation == "C":
+            # INDCALL violation: get all REG uses
+            init_state = DifferentialTraceState([trace1])
+            if trace2 is not None:
+                init_state.states.append(trace2)
             self.follow_def_use_chain_recursive(diff_states=[init_state], follow_mem=False, follow_regs=True)
 
         else:
