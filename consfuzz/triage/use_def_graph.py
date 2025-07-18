@@ -1,3 +1,10 @@
+"""
+File: Implementation of the Use-Def Graph, used for nicer printing (and potentially graph analysis).
+
+Copyright (C) Microsoft Corporation
+SPDX-License-Identifier: MIT
+"""
+
 from typing import Dict, Optional
 from enum import Enum
 

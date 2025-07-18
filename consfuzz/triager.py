@@ -1,5 +1,3 @@
-#!/usr/bin/python3
-
 """
 File: Inspect a single reported leakage.
 
@@ -7,33 +5,60 @@ Copyright (C) Microsoft Corporation
 SPDX-License-Identifier: MIT
 """
 
+import os
 import subprocess as sp
 from typing import Any, List, Optional, Tuple
-import argparse
-import os
 
 from rvzr.model_dynamorio.trace_decoder import TraceDecoder, TraceEntryType, DebugTraceEntryType
-from inspector.use_def_tracker import UseDefTracker
-from inspector import get_plugin_path
-from inspector.shared_types import TraceLineNum
-from utils.config import Config
-from utils.symbol_server import SymbolServer, CombinedSymbolServer
+
+from .triage import get_plugin_path
+from .triage.config import LeakageInspectorConfig
+from .triage.use_def_tracker import UseDefTracker
+from .triage.shared_types import TraceLineNum
+from .triage.symbol_server import SymbolServer, CombinedSymbolServer
 
 _TRACING_FLAGS = "--log-level 5 --debug-trace-output {dbg_trace_file} "
 
 type InstPc = int
+
+
+def _parse_traces_info(file_and_line: str, baseline: str) -> List[Tuple[str, TraceLineNum]]:
+    # Parse trace path and line of the cmdline arguments
+    splitted = file_and_line.split(':')
+    trace1 = ':'.join(splitted[:-2])
+    line1 = int(splitted[-2])
+
+    traces = [(trace1, line1)]
+
+    if baseline != 'none':
+        # Generate trace path and line for the baseline we should compare against (needed for
+        # differential analysis)
+        if baseline == 'auto':
+            input_name = os.path.basename(trace1)
+            ext = '.' + trace1.split('.')[-1]
+            trace2 = trace1.replace(input_name, '000' + ext) # 000.trace or 000.dbgtrace
+        else:
+            trace2 = baseline
+
+        line2 = int(splitted[-1])
+        traces.append((trace2, line2))
+
+    return traces
+
 
 class LeakageInspector:
     """
     Extract information from the report for leakage analysis.
     """
     _decoder: TraceDecoder
+    _config: LeakageInspectorConfig
 
     leak_trace: list[Any]
     debug_trace: list[Any]
 
-    def __init__(self):
+    def __init__(self, config: LeakageInspectorConfig):
         self._decoder = TraceDecoder()
+        self._config = config
         self.leak_trace = None
         self.debug_trace = None
 
@@ -224,97 +249,65 @@ class LeakageInspector:
         gdb_string += "\nspec bt"
         return gdb_string
 
+    #---------------------------------------------------------------------------
+    # Public interface
+    #---------------------------------------------------------------------------
+    def inspect(self, file_and_line: str,
+                violation: str,
+                baseline: str,
+                binary: str,
+                skip_tracing: bool,
+                usedef: bool,
+                debug_trace: bool) -> None:
+        traces = _parse_traces_info(file_and_line, baseline)
 
-def parse_traces_info(file_and_line: str, baseline:str) -> List[Tuple[str, TraceLineNum]]:
-    # Parse trace path and line of the cmdline arguments
-    splitted = file_and_line.split(':')
-    trace1 = ':'.join(splitted[:-2])
-    line1 = int(splitted[-2])
+        dbg_traces = []
 
-    traces = [(trace1, line1)]
+        # Create a GDB script to reach the specified line
+        for idx, (trace, line) in enumerate(traces):
+            # If the specified line is a line in the trace, we need to find the corresponding line in
+            # the _debug_ trace.
+            if not debug_trace:
+                # Find the target PC in the leak trace
+                pc, leak_type, n_occurrences = self.find_leak_pc(trace, line)
+                regenerate_trace = not skip_tracing
+                # Generate the debug trace and find the corresponding line
+                dbg_trace, dbg_line = self.find_dbg_line(trace, pc, leak_type, n_occurrences, regenerate_trace)
+            else:
+                dbg_trace = trace
+                dbg_line = line
+                _, decoded = self._decoder.decode_trace_file(dbg_trace)
+                assert len(decoded) == 1
+                self.debug_trace = decoded[0]
 
-    if baseline != 'none':
-        # Generate trace path and line for the baseline we should compare against (needed for
-        # differential analysis)
-        if baseline == 'auto':
-            input_name = os.path.basename(trace1)
-            ext = '.' + trace1.split('.')[-1]
-            trace2 = trace1.replace(input_name, '000' + ext) # 000.trace or 000.dbgtrace
-        else:
-            trace2 = baseline
+            # Create the gdb script to reach the target line
+            script = self.generate_gdb_script(dbg_trace, dbg_line)
+            script_name = f"spec_{idx}.gdb"
+            with open(script_name, "w") as f:
+                f.write(script)
+            # Print the gdb command (user can copy-paste in separate terminal)
+            program_cmd = self._get_original_cmd(trace).split(" -- ")[1]
+            print(f"\n====== GDB Command:\ngdb -x {script_name} --args {program_cmd}\n======")
 
-        line2 = int(splitted[-1])
-        traces.append((trace2, line2))
+            # Append the already parsed trace, used later for use-def analysis
+            raw_dbg_trace = self.debug_trace
+            dbg_traces.append((raw_dbg_trace, dbg_line))
 
-    return traces
+        if usedef:
+            # Create output file
+            trace1, line1 = traces[0]
+            use_def_file = trace1.replace('.trace', '.usedef').replace('.dbgtrace', '.usedef')
+            print(f"\n====== Printing use-def information at {use_def_file}")
+            # Setup symbol server
+            symbols = SymbolServer("") if binary is None else CombinedSymbolServer(binary) # GdbSymbolServer(binary)
+            # Print textual representation of the use-def chain to a file
+            tracker = UseDefTracker(use_def_file, self._config, symbols)
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Inspect a leakage.")
-    parser.add_argument("file_and_line", type=str, help="A string <trace_file:line1:line2> as found in the report")
-    parser.add_argument("-b", "--binary", type=str,
-                        help="Path of the binary to read the debug symbols from",
-                        default=None)
-    parser.add_argument("-c", "--config", type=str, help="Path of the yaml config", default=Config.get_default_config())
-    parser.add_argument("-v", "--violation", type=str, help="Which violation has been found at the specified line", choices=["I", "D", "C"])
-    parser.add_argument("--skip-tracing", action="store_true", help="Avoid regenerating traces")
-    parser.add_argument("--usedef", action="store_true", help="Generate a use-def analysis for this violation")
-    parser.add_argument("--debug-trace", action="store_true", help="The provided file path is already a debug trace")
-    parser.add_argument("--baseline", type=str, default="auto",
-                        help="Select a second trace as baseline for differential analysis." +
-                        "Specify 'auto' for automatic baseline and 'none' for no differential analysis.")
-    args = parser.parse_args()
-    traces = parse_traces_info(args.file_and_line, args.baseline)
+            if len(dbg_traces) == 1:
+                dbg_traces.append((None, None))
 
-    inspector = LeakageInspector()
-    dbg_traces = []
-
-    # Create a GDB script to reach the specified line
-    for idx, (trace, line) in enumerate(traces):
-        # If the specified line is a line in the trace, we need to find the corresponding line in
-        # the _debug_ trace.
-        if not args.debug_trace:
-            # Find the target PC in the leak trace
-            pc, leak_type, n_occurrences = inspector.find_leak_pc(trace, line)
-            regenerate_trace = not args.skip_tracing
-            # Generate the debug trace and find the corresponding line
-            dbg_trace, dbg_line = inspector.find_dbg_line(trace, pc, leak_type, n_occurrences, regenerate_trace)
-        else:
-            dbg_trace = trace
-            dbg_line = line
-            _, decoded = inspector._decoder.decode_trace_file(dbg_trace)
-            assert len(decoded) == 1
-            inspector.debug_trace = decoded[0]
-
-        # Create the gdb script to reach the target line
-        script = inspector.generate_gdb_script(dbg_trace, dbg_line)
-        script_name = f"spec_{idx}.gdb"
-        with open(script_name, "w") as f:
-            f.write(script)
-        # Print the gdb command (user can copy-paste in separate terminal)
-        program_cmd = inspector._get_original_cmd(trace).split(" -- ")[1]
-        print(f"\n====== GDB Command:\ngdb -x {script_name} --args {program_cmd}\n======")
-
-        # Append the already parsed trace, used later for use-def analysis
-        raw_dbg_trace = inspector.debug_trace
-        dbg_traces.append((raw_dbg_trace, dbg_line))
-
-    if args.usedef:
-        # Create output file
-        trace1, line1 = traces[0]
-        use_def_file = trace1.replace('.trace', '.usedef').replace('.dbgtrace', '.usedef')
-        print(f"\n====== Printing use-def information at {use_def_file}")
-        # Setup symbol server
-        symbols = SymbolServer("") if args.binary is None else CombinedSymbolServer(args.binary) # GdbSymbolServer(binary)
-        # Setup configuration
-        Config.init(args.config)
-        # Print textual representation of the use-def chain to a file
-        tracker = UseDefTracker(use_def_file, symbols)
-
-        if len(dbg_traces) == 1:
-            dbg_traces.append((None, None))
-
-        graph = tracker.analyze(dbg_traces[0][0], dbg_traces[0][1], dbg_traces[1][0], dbg_traces[1][1], args.violation)
-        # Print use-def graph to a dot file
-        dot_file = use_def_file + ".dot"
-        print(f"\n====== Printing graph at {dot_file}")
-        graph.draw(dot_file)
+            graph = tracker.analyze(dbg_traces[0][0], dbg_traces[0][1], dbg_traces[1][0], dbg_traces[1][1], violation)
+            # Print use-def graph to a dot file
+            dot_file = use_def_file + ".dot"
+            print(f"\n====== Printing graph at {dot_file}")
+            graph.draw(dot_file)

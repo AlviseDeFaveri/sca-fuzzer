@@ -11,13 +11,8 @@ from .regs import REGS, strip_alias, init_reg_map
 from .rvzr_trace import TraceState, ParsedInst
 from .shared_types import *
 from .use_def_graph import UseDefGraph, TerminatorNodeType, TerminatorNode, UseDefNode, UseDefEdge
-
-# FIXME!!!!!!!!!!!!!!!!!!!!!!
-import sys
-sys.path.append("..")
-from utils.symbol_server import SymbolServer
-from utils.config import Config
-
+from .symbol_server import SymbolServer
+from .config import LeakageInspectorConfig
 
 # --------------------------------------------------------------------------------------------------
 # Local Types
@@ -75,14 +70,16 @@ class UseDefTracker:
     _symbol_server: SymbolServer
     _prefix: str
     _graph: UseDefGraph
+    _config: LeakageInspectorConfig
 
-    def __init__(self, out_file: str, symbol_server: SymbolServer) -> None:
+    def __init__(self, out_file: str, config: LeakageInspectorConfig, symbol_server: SymbolServer) -> None:
         self._out_file = out_file
         self._symbol_server = symbol_server
         self._visited = []
         self._prefix = ""
         self._out_file = open(out_file, "w")
         self._graph = UseDefGraph()
+        self._config = config
 
         # Initialize the list of registers
         init_reg_map()
@@ -141,11 +138,11 @@ class UseDefTracker:
 
         # Check if the current instruction is a sink.
         loc = self._get_loc(cur_insts[0])
-        if any(loc.endswith(x) for x in Config.get().declassified):
+        if any(loc.endswith(x) for x in self._config.declassified):
             self._print("    END: Found Declassified")
             self._graph.nodes[cur_line] = TerminatorNode(TerminatorNodeType.DECLASSIFIED, cur_line)
             return []
-        if any(loc.endswith(x) for x in Config.get().key):
+        if any(loc.endswith(x) for x in self._config.key):
             self._print("    END: Found Declassified")
             self._graph.nodes[cur_line] = TerminatorNode(TerminatorNodeType.KEY, cur_line)
             return []
@@ -160,7 +157,7 @@ class UseDefTracker:
         trimmed_by_diff = 0
         for use, vals in merged.items():
 
-            if use.use_type == UseType.REG and strip_alias(REGS[use.addr]) in Config.get().dont_follow:
+            if use.use_type == UseType.REG and strip_alias(REGS[use.addr]) in self._config.get().dont_follow:
                 # We avoid following some registers that are not logged and are known to
                 # cause overtainting (i.e. AVX K registers).
                 self._print("    Use of " + print_use(use))
@@ -169,8 +166,8 @@ class UseDefTracker:
                 self._graph.link(cur_line, idx, use)
                 continue
 
-            elif use.use_type == UseType.MEM and Config.get_sym_annotation(use.addr) is not None:
-                name, offset = Config.get_sym_annotation(use.addr)
+            elif use.use_type == UseType.MEM and self._config.get_sym_annotation(use.addr) is not None:
+                name, offset = self._config.get_sym_annotation(use.addr)
                 self._print("    Use of " + print_use(use))
                 self._print(f"        END: Annotated symbol: {name}+{offset}")
                 idx = self._graph.add_terminator(TerminatorNodeType.KNOWN_SYMBOL)
