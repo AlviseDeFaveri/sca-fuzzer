@@ -222,67 +222,13 @@ bool SpeculatorABC::handle_mem_access(bool is_write, void *address, uint64_t siz
     return true;
 }
 
-static bool is_supported_reg(const reg_id_t reg)
-{
-    // Some registers cannot be modified from the API, see DynamoRIO NYI i#3504
-    return reg_is_gpr(reg) or (reg >= DR_REG_START_XMM && reg <= DR_REG_STOP_XMM) or
-           (reg >= DR_REG_START_YMM && reg <= DR_REG_STOP_YMM) or
-           (reg >= DR_REG_START_ZMM && reg <= DR_REG_STOP_ZMM);
-}
-
-std::pair<instr_t *, byte *> get_load_inst(void *dc, byte *pc, Decoder &decoder)
-{
-    // Decode the instruction and get its next PC
-    instr_t *cur_instr = decoder.get_decoded_instr(dc, pc);
-    byte *next_pc = decoder.get_next_pc(dc, pc);
-
-    // Return a nullptr if it's not a load.
-    if (not instr_reads_memory(cur_instr))
-        return {nullptr, nullptr};
-
-    return {cur_instr, next_pc};
-}
-
-bool SpeculatorABC::handle_exception(void *drcontext, dr_siginfo_t *siginfo)
+bool SpeculatorABC::handle_exception(void */*drcontext*/, dr_siginfo_t *siginfo)
 {
     if (not in_speculation)
         return false; // nothing to do
 
     // Get faulty instruction's context
     dr_mcontext_t *mc = siginfo->mcontext;
-
-    // Check if we need to poison the destination register. If not, just rollback.
-    if (poison_value.has_value()) {
-        // Decode the instruction
-        const auto [cur_instr, next_pc] = get_load_inst(drcontext, mc->pc, decoder);
-
-        // Forward poison value
-        if (cur_instr != nullptr and instr_num_dsts(cur_instr) > 0) {
-            // Get the first destination register
-            // TODO: what if the instruction has more than one destination register?
-            const opnd_t dst = instr_get_dst(cur_instr, 0);
-            // TODO: what if the destination is memory?
-            if (opnd_is_reg(dst)) {
-                reg_id_t reg = opnd_get_reg(dst);
-                reg = reg_to_pointer_sized(reg);
-                // Not all registers can be written from the API
-                if (is_supported_reg(reg)) {
-                    // Create a buffer with the repeated poison value
-                    constexpr int max_reg_size = 64;
-                    constexpr int n_elems = max_reg_size / sizeof(uint64_t);
-                    std::array<uint64_t, n_elems> poison_buf = {};
-                    std::fill(poison_buf.begin(), poison_buf.end(), poison_value.value());
-
-                    // Set the destination register to the poison value
-                    reg_set_value_ex(reg, mc, (uint8_t *)(poison_buf.data()));
-                    // Skip to the next instruction
-                    // TODO: what if the instruction is supposed to have other side effects?
-                    mc->pc = next_pc;
-                    return true; // execution was redirected
-                }
-            }
-        }
-    }
 
     // Flush stores that are in-flight (i.e. were performed by the failing instruction)
     store_log.flush_uncommitted();
