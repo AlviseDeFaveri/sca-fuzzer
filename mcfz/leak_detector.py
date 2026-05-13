@@ -45,6 +45,11 @@ ClauseType = Literal['seq', 'cond']
     'cond' for speculative leaks under the COND execution clause.
 """
 
+PolicyType = str
+""" Name of the policy under which the trace was collected (e.g. 'key', 'plain').
+    Derived from the keys of config.template_cmds.
+"""
+
 TraceEntryId = NewType('TraceEntryId', int)
 """ Entry ID in the original (raw) trace file, used to locate the leak. """
 
@@ -88,18 +93,24 @@ LeakageMap = Dict[
     Dict[
         LeakType,
         Dict[
-            PC,
-            List[LinesInTracePair],
+            PolicyType,
+            Dict[
+                PC,
+                List[LinesInTracePair],
+            ],
         ],
     ]
 ]
-""" Map of leaks found in the traces, indexed by leak type and PC.
-    The value is a list of trace file names where the leak was found.
+""" Map of leaks found in the traces, indexed by clause type, leak type, policy, and PC.
+    The value is a list of locations in the trace files where the leak was observed.
 """
 
 DirName = str
 FileName = str
 WorkDirMap = Dict[DirName, List[FileName]]
+
+TraceLeaks = Tuple[LeakyInstrArray, FileName, PolicyType]
+"""" Tuple representing the leaks found in a trace, along with the trace file name and policy. """
 
 # ==================================================================================================
 # Classes representing parsed traces and their elements
@@ -214,15 +225,21 @@ class _LeakDetectionWorker:
         self._compressor = Compressor(config)
         self._logger = Logger("LeakDetectionWorker")
 
+    def _extract_policy_from_filename(self, trace_file: FileName) -> PolicyType:
+        """ Extract the policy name from the trace file name. """
+        filename = os.path.basename(trace_file)
+        policy_str = filename.split('.')[1]
+        return PolicyType(policy_str)
+
     def identify_all_leaks_in_group(
-            self, trace_files: List[FileName]) -> List[Tuple[LeakyInstrArray, str]]:
+            self, trace_files: List[FileName]) -> List[TraceLeaks]:
         """
         Identify all leaks in a group of traces that share the same reference trace.
         Returns a list of tuples (leaky_instructions, source), where:
         - leaky_instructions is an array of leaky instructions found in the group,
         - source is a string describing the source of the leak (e.g., trace file name).
         """
-        all_leaks: List[Tuple[LeakyInstrArray, str]] = []
+        all_leaks: List[TraceLeaks] = []
 
         # # Find and parse the reference trace (000.trace) for this group of traces.
         try:
@@ -244,7 +261,9 @@ class _LeakDetectionWorker:
             if leaky_instructions.size == 0:
                 continue
 
-            all_leaks.append((leaky_instructions, trace_file))
+            policy = self._extract_policy_from_filename(trace_file)
+
+            all_leaks.append((leaky_instructions, trace_file, policy))
         return all_leaks
 
     def _find_reference_trace(self, trace_files: List[FileName]) -> FileName:
@@ -376,7 +395,7 @@ class _LeakDetectionWorker:
 
 
 def _analyse_group_worker(args: Tuple[Config, List[FileName]]) \
-        -> Tuple[List[Tuple[LeakyInstrArray, str]], int]:
+        -> Tuple[List[TraceLeaks], int]:
     """
     Worker function for multiprocessing: analyzes a group of traces and returns the leaks found
     along with the number of traces analyzed (for progress tracking).
@@ -425,7 +444,7 @@ class LeakDetector:
             all_groups = all_groups[:num_groups]
         work_items = ((self._config, trace_files) for trace_files in all_groups)
 
-        def _on_result(result: Tuple[List[Tuple[LeakyInstrArray, str]], int]) -> None:
+        def _on_result(result: Tuple[List[TraceLeaks], int]) -> None:
             all_leaks, num_files = result
             progress_bar.update(num_files)
             self._update_global_map(leakage_map, all_leaks)
@@ -474,12 +493,11 @@ class LeakDetector:
                 dir_map[subdir_full] = file_list
         return dir_map
 
-    def _update_global_map(self, leakage_map: LeakageMap, all_leaks: List[Tuple[LeakyInstrArray,
-                                                                                str]]) -> None:
+    def _update_global_map(self, leakage_map: LeakageMap, all_leaks: List[TraceLeaks]) -> None:
         """
         Update the global leakage map with all leaks collected from a group of traces.
         """
-        for leaky_instructions, source in all_leaks:
+        for leaky_instructions, source, policy in all_leaks:
             for leaky_instr in leaky_instructions:
                 # Unpack the leaky instruction from numpy structured array
                 leak_type: LeakType = leaky_instr['leak_type']
@@ -488,8 +506,11 @@ class LeakDetector:
                 ref_entry_id = int(leaky_instr['ref_trace_entry_id'])
                 tgt_entry_id = int(leaky_instr['target_trace_entry_id'])
 
-                per_type_map = leakage_map.setdefault(clauseType, {}).setdefault(leak_type, {})
+                per_policy_map = (leakage_map
+                                  .setdefault(clauseType, {})
+                                  .setdefault(leak_type, {})
+                                  .setdefault(policy, {}))
 
                 # Create a new leakage location and append it to the map
                 leakage_location = LinesInTracePair(f"{source}:{tgt_entry_id}:{ref_entry_id}")
-                per_type_map.setdefault(pc, []).append(leakage_location)
+                per_policy_map.setdefault(pc, []).append(leakage_location)

@@ -5,7 +5,9 @@ Copyright (C) Microsoft Corporation
 SPDX-License-Identifier: MIT
 """
 from __future__ import annotations
-from typing import TYPE_CHECKING, Final, List, Tuple
+from typing import TYPE_CHECKING, Final, List, Tuple, Optional
+import tempfile
+import subprocess
 
 import os
 
@@ -70,9 +72,74 @@ class Boost:
         pub_data = ref_data[CONF_SIZE + priv_size:CONF_SIZE + priv_size + pub_size]
         for i in range(1, self._boosting_factor):
             priv_data = os.urandom(priv_size)
-            dest_path = os.path.join(wd, f"{i:03}.bin")
+            dest_path = os.path.join(wd, f"{i:03}.key.bin")
             with open(dest_path, 'wb') as dest_file:
                 dest_file.write(config_data + priv_data + pub_data)
+
+    def _run_input(self, input_path: str, extra_args: Optional[List[str]] = None) -> None:
+        """
+        Get the command to run the binary with the given input.
+
+        :param input_path: Path to the input file
+        :param extra_args: List of extra arguments for the command
+        :return: Command string to execute
+        """
+        cmd = ' '.join(self._config.template_cmd)
+        cmd = cmd.replace("@@", input_path)
+        cmd = cmd.replace("@#", self._config.bin_native)
+        if extra_args:
+            cmd += ' ' + ' '.join(extra_args)
+
+        subprocess.run(cmd, shell=True, check=True)
+
+
+    def _get_plaintext_position(self, reference_input: str) -> Optional[Tuple[int, int]]:
+        """
+        Run the binary with the reference input and capture the plaintext position
+        inside of the given input.
+
+        :param reference_input: Path to the reference input file
+        :return: Tuple of (plaintext_start, plaintext_end) offsets
+        :raises ValueError: If the plaintext position cannot be determined
+        """
+        boundaries_file = tempfile.NamedTemporaryFile()
+
+        # Run the binary with the reference input and capture the plaintext position.
+        try:
+            self._run_input(reference_input, extra_args=["--print-plaintext-position",
+                                                                boundaries_file.name])
+        except subprocess.CalledProcessError:
+            return None
+
+        # Read the plaintext position from the temporary file.
+        with open(boundaries_file.name, 'r') as f:
+            line = f.readline().strip()
+            try:
+                start_str, end_str = line.split(',')
+                return int(start_str), int(end_str)
+            except Exception as e:
+                return None
+
+    def _generate_plaintext_variations(self, wd: str, reference_input: str) -> None:
+        """
+        Given a reference input, generate variations that only mutate the plaintext.
+        """
+        boundaries = self._get_plaintext_position(reference_input)
+        if boundaries is None:
+            print("WARNING: Failed to obtain plaintext position from the binary."
+                  " Skipping plaintext variation generation.")
+            return
+
+        ptx_start, ptx_end = boundaries
+
+        with open(reference_input, 'rb') as f:
+            ref_data = f.read()
+
+        for i in range(1, self._boosting_factor):
+            rand_ptx = os.urandom(ptx_end - ptx_start)
+            dest_path = os.path.join(wd, f"{i:03}.plain.bin")
+            with open(dest_path, 'wb') as dest_file:
+                dest_file.write(ref_data[:ptx_start] + rand_ptx + ref_data[ptx_end:])
 
     def _collect_reference_inputs(self) -> List[Tuple[str, str]]:
         """
@@ -96,7 +163,12 @@ class Boost:
         for fname in sorted(os.listdir(minimized_dir)):
             fpath = os.path.join(minimized_dir, fname)
             if os.path.isfile(fpath):
-                inputs.append((fname, fpath))
+                try:
+                    self._run_input(fpath)
+                    inputs.append((fname, fpath))
+                except subprocess.CalledProcessError:
+                    print(f"WARNING: Reference input '{fname}' causes the binary to error out. Skipping this input.")
+                    continue # Skip inputs that cause the binary to error out
 
         return inputs
 
@@ -120,6 +192,12 @@ class Boost:
 
             try:
                 self._generate_from_reference(dest_dir, ref_input_path)
+            except ValueError as ve:
+                print(f"[Boosting] Skipping input '{ref_input}': {ve}")
+                os.rmdir(dest_dir)
+
+            try:
+                self._generate_plaintext_variations(dest_dir, ref_input_path)
             except ValueError as ve:
                 print(f"[Boosting] Skipping input '{ref_input}': {ve}")
                 os.rmdir(dest_dir)
